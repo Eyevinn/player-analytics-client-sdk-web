@@ -31,7 +31,6 @@
     "eslint": "^8.5.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^4.0.0",
-    "husky": "^7.0.0",
     "parcel": "^2.0.1",
     "player-analytics-specification": "git@github.com:Eyevinn/player-analytics-specification.git",
     "prettier": "^2.5.1",
