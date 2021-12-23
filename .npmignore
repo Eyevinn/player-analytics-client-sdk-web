@@ -1,0 +1,7 @@
+.cache
+.vscode
+demo/
+node_modules/
+src/
+.parcel-cache/
+.husky/
