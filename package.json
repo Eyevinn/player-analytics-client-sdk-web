@@ -1,6 +1,6 @@
 {
   "name": "@eyevinn/player-analytics-client-sdk-web",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "",
   "source": "index.ts",
   "main": "dist/index.js",
@@ -8,7 +8,7 @@
   "scripts": {
     "start": "parcel demo/index.html",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
-    "prepare": "npm run build && husky install",
+    "prepare": "npm run build",
     "prettier": "prettier --write './src/**/*.{ts,js,json,html}'"
   },
   "repository": {
