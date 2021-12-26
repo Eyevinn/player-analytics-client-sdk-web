@@ -194,6 +194,7 @@ export class PlayerAnalyticsConnector {
   }
 
   public destroy() {
+    this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
     this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.stopInterval();
