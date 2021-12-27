@@ -55,7 +55,7 @@ export class Reporter {
         mode: "cors",
         cache: "no-cache",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
         body: JSON.stringify(data),
       });
@@ -95,7 +95,7 @@ export class Reporter {
         mode: "cors",
         cache: "no-cache",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
         body: JSON.stringify(payload),
       });
