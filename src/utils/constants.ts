@@ -14,3 +14,5 @@ export enum EPASEvents {
   bitratechanged = "bitrate_changed",
   heartbeat = "hearbeat",
 }
+
+export const HEARTBEAT_INTERVAL = 5000;

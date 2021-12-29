@@ -1,4 +1,5 @@
 import { TPlayerAnalyticsEvent } from "player-analytics-specification";
+import { HEARTBEAT_INTERVAL } from "./constants";
 
 export interface IReporterOptions {
   eventsinkUrl: string;
@@ -23,7 +24,7 @@ export class Reporter {
     this.debug = options.debug;
     this.eventsinkUrl = options.eventsinkUrl;
     this.sessionId = options.sessionId;
-    this.heartbeatInterval = options.heartbeatInterval || 60_000;
+    this.heartbeatInterval = options.heartbeatInterval || HEARTBEAT_INTERVAL;
 
     if (this.debug) {
       console.log("[AnalyticsReporter] Initiated AnalyticsReporter", options);
@@ -68,13 +69,17 @@ export class Reporter {
       if (!this.sessionId && !initResponseJson.sessionId) {
         throw new Error(`[AnalyticsReporter] init failed: no sessionId`);
       }
-      if (!initResponseJson.heartbeatInterval) {
+      if (!this.heartbeatInterval && !initResponseJson.heartbeatInterval) {
         throw new Error(
           `[AnalyticsReporter] init failed: heartbeatInterval not found in response`
         );
       }
-      this.heartbeatInterval = initResponseJson.heartbeatInterval;
-      this.sessionId = initResponseJson.sessionId;
+      if (initResponseJson.heartbeatInterval) {
+        this.heartbeatInterval = initResponseJson.heartbeatInterval;
+      }
+      if (initResponseJson.sessionId) {
+        this.sessionId = initResponseJson.sessionId;
+      }
       return {
         heartbeatInterval: this.heartbeatInterval,
         sessionId: this.sessionId,

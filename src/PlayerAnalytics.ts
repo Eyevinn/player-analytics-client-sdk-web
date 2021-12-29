@@ -16,6 +16,7 @@ import {
   TStoppedEvent,
   TWarningEvent,
 } from "player-analytics-specification";
+import { HEARTBEAT_INTERVAL } from "./utils/constants";
 import { Reporter } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
@@ -48,6 +49,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
       sessionId,
       eventsinkUrl: this.eventsinkUrl,
       debug: this.debug,
+      heartbeatInterval: HEARTBEAT_INTERVAL
     });
     const { sessionId: generatedSessionId, heartbeatInterval } =
       await this.analyticsReporter.init(sessionId, options);
