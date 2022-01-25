@@ -9,7 +9,8 @@
     "start": "parcel demo/index.html",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
     "prepare": "npm run build",
-    "prettier": "prettier --write './src/**/*.{ts,js,json,html}'"
+    "prettier": "prettier --write './src/**/*.{ts,js,json,html}'",
+    "postversion": "git push --no-verify && git push --tags --no-verify"
   },
   "repository": {
     "type": "git",
