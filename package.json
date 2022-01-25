@@ -36,10 +36,7 @@
     "typescript": "^4.5.4"
   },
   "dependencies": {
-    "player-analytics-specification": "git@github.com:Eyevinn/player-analytics-specification.git",
-    "@eyevinn/video-event-filter": "^1.0.6"
-  },
-  "publishConfig": {
-    "@eyevinn:registry": "https://npm.pkg.github.com"
+    "@eyevinn/player-analytics-specification": "0.2.0",
+    "@eyevinn/video-event-filter": "^1.0.7"
   }
 }

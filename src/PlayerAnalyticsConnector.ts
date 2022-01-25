@@ -6,7 +6,7 @@ import {
   TBitrateChangedEventPayload,
   TErrorEventPayload,
   UUID,
-} from "player-analytics-specification";
+} from "@eyevinn/player-analytics-specification";
 
 export interface IPlayerAnalyticsConnectorInitOptions {
   sessionId?: string;
@@ -46,7 +46,7 @@ export class PlayerAnalyticsConnector {
   private videoEventListener: any;
 
   private heartbeatInterval: number;
-  private heartbeatIntervalTimer: NodeJS.Timer;
+  private heartbeatIntervalTimer: ReturnType<typeof setInterval>;
 
   constructor(eventsinkUrl: string, debug?: boolean) {
     this.eventsinkUrl = eventsinkUrl;

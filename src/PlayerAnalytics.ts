@@ -15,7 +15,7 @@ import {
   TSeekingEvent,
   TStoppedEvent,
   TWarningEvent,
-} from "player-analytics-specification";
+} from "@eyevinn/player-analytics-specification";
 import { HEARTBEAT_INTERVAL } from "./utils/constants";
 import { Reporter } from "./utils/Reporter";
 

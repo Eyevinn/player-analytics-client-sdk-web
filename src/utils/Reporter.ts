@@ -1,4 +1,4 @@
-import { TPlayerAnalyticsEvent } from "player-analytics-specification";
+import { TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
 import { HEARTBEAT_INTERVAL } from "./constants";
 
 export interface IReporterOptions {

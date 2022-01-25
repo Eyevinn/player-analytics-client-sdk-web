@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.querySelector("video");
 
   const eventsinkUrl = "https://sink.epas.eyevinn.technology/";
-  const debug = false;
+  const debug = true;
 
   const analytics = new PlayerAnalyticsConnector(
     eventsinkUrl,
