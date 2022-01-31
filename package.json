@@ -4,6 +4,7 @@
   "description": "",
   "source": "index.ts",
   "main": "dist/index.js",
+  "module": "dist/module.js",
   "types": "dist/types.d.ts",
   "scripts": {
     "start": "parcel demo/index.html",
