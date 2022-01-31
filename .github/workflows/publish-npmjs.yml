@@ -14,10 +14,6 @@ jobs:
         with:
           node-version: 16
           registry-url: https://registry.npmjs.org/
-      - run: |
-          touch .npmrc
-          echo @eyevinn:registry=https://npm.pkg.github.com >> .npmrc
-          echo //npm.pkg.github.com/:_authToken=${NPM_GITHUB_TOKEN} >> .npmrc
       - run: npm install
       - run: npm run build
       - run: npm publish --access public
