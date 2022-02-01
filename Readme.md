@@ -18,7 +18,7 @@ const playerAnalytics = new PlayerAnalyticsConnector("https://your-eventsink-url
 
 // Initiate the analytics with the base data needed
 // This will create you session in the backend
-playerAnalytics.init({
+await playerAnalytics.init({
   sessionId: "generated-unique-uuid-session-id",
   live: false,
   contentId: "big-buck-bunny-720",
@@ -69,7 +69,7 @@ import { PlayerAnalytics } from "@eyevinn/player-analytics-client-sdk-web";
 
 // Create your instance and set the analytics eventsink endpoint
 const playerAnalytics = new PlayerAnalytics("https://your-eventsink-url.io");
-playerAnalytics.initiateAnalyticsReporter({
+await playerAnalytics.initiateAnalyticsReporter({
   sessionId: "generated-unique-uuid-session-id",
   live: false,
   contentId: "big-buck-bunny-720",
