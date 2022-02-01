@@ -62,6 +62,12 @@ playerAnalytics.reportWarning({
 });
 ```
 
+```js
+// when leaving the player, to stop the analytics in a correct manor
+playerAnalytics.reportStop();
+playerAnalytics.destroy();
+```
+
 ### Manual Event Triggering
 
 ```js

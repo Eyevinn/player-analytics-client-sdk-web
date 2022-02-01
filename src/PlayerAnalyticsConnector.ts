@@ -154,6 +154,15 @@ export class PlayerAnalyticsConnector {
     });
   }
 
+  public reportStop() {
+    this.playerAnalytics.stopped({
+      event: EPASEvents.ended,
+      ...this.playbackState(),
+      payload: { reason: "aborted" },
+    });
+    this.stopInterval();
+  }
+
   public reportError(error: TErrorEventPayload) {
     this.playerAnalytics.error({
       event: EPASEvents.error,
