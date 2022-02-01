@@ -14,7 +14,7 @@ npm install @eyevinn/player-analytics-client-sdk-web
 import { PlayerAnalyticsConnector } from "@eyevinn/player-analytics-client-sdk-web";
 
 // Create your instance and set the analytics eventsink endpoint
-const playerAnalytics = new PlayerAnalyticsConnector("https://eventsink-url.io");
+const playerAnalytics = new PlayerAnalyticsConnector("https://your-eventsink-url.io");
 
 // Initiate the analytics with the base data needed
 // This will create you session in the backend
@@ -68,8 +68,8 @@ playerAnalytics.reportWarning({
 import { PlayerAnalytics } from "@eyevinn/player-analytics-client-sdk-web";
 
 // Create your instance and set the analytics eventsink endpoint
-const playerAnalytics = new PlayerAnalytics("https://eventsink-url.io");
-playerAnalytics.init({
+const playerAnalytics = new PlayerAnalytics("https://your-eventsink-url.io");
+playerAnalytics.initiateAnalyticsReporter({
   sessionId: "generated-unique-uuid-session-id",
   live: false,
   contentId: "big-buck-bunny-720",
@@ -89,6 +89,13 @@ videoElement.addEventListener("play", () => {
   });
 });
 ```
+
+### Constructor parameters
+
+These applies to both the `PlayerAnalyticsConnector` and `PlayerAnalytics`.
+
+- `eventsinkUrl`, the url to your event sink.
+- `debug`, default false, triggers output to dev console rather than actual http posts.
 
 ### Init parameters
 
