@@ -15,4 +15,4 @@ export enum EPASEvents {
   heartbeat = "hearbeat",
 }
 
-export const HEARTBEAT_INTERVAL = 5000;
+export const HEARTBEAT_INTERVAL = 30000;

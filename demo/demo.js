@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     live: false,
     contentId: "BBB",
     contentUrl: videoElement.src,
+    heartbeatInterval: 5000,
   });
   analytics.load(videoElement);
 });
