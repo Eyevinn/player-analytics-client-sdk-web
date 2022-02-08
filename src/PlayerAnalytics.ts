@@ -49,7 +49,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
       sessionId,
       eventsinkUrl: this.eventsinkUrl,
       debug: this.debug,
-      heartbeatInterval: HEARTBEAT_INTERVAL
+      heartbeatInterval: options.heartbeatInterval || HEARTBEAT_INTERVAL
     });
     const { sessionId: generatedSessionId, heartbeatInterval } =
       await this.analyticsReporter.init(sessionId, options);

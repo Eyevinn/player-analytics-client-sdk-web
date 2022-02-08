@@ -18,6 +18,8 @@ export interface IPlayerAnalyticsConnectorInitOptions {
   deviceId?: string;
   deviceModel?: string;
   deviceType?: string;
+
+  heartbeatInterval?: number;
 }
 
 export interface IBitrateChangedPayload {
