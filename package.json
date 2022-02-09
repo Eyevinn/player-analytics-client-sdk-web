@@ -1,6 +1,6 @@
 {
   "name": "@eyevinn/player-analytics-client-sdk-web",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "",
   "source": "index.ts",
   "main": "dist/index.js",
