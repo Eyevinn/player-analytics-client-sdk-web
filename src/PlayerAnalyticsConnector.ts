@@ -211,6 +211,13 @@ export class PlayerAnalyticsConnector {
     };
   }
 
+  public deinit() {
+    this.stopInterval();
+    this.heartbeatInterval = null;
+    this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter = null;
+  }
+
   public destroy() {
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;

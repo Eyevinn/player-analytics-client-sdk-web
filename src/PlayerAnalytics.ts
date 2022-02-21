@@ -50,6 +50,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
       debug: this.debug,
       heartbeatInterval: options.heartbeatInterval || HEARTBEAT_INTERVAL,
     });
+    delete options.heartbeatInterval; // this should not be sent along as payload to the eventsink
     const { sessionId: generatedSessionId, heartbeatInterval } =
       await this.analyticsReporter.init(sessionId, options);
     return { sessionId: generatedSessionId, heartbeatInterval };
