@@ -6,16 +6,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   const eventsinkUrl = "https://sink.epas.eyevinn.technology/";
   const debug = true;
 
-  const analytics = new PlayerAnalyticsConnector(
-    eventsinkUrl,
-    debug
-  );
+  const analytics = new PlayerAnalyticsConnector(eventsinkUrl, debug);
+
   await analytics.init({
     sessionId: `demo-page-${Date.now()}`,
-    live: false,
     contentId: "BBB",
     contentUrl: videoElement.src,
     heartbeatInterval: 5000,
   });
+
   analytics.load(videoElement);
+
+  //Should be set up with your tech and a proper listener..
+  videoElement.addEventListener("canplay", () => {
+    analytics.reportMetadata({ live: false });
+  });
 });

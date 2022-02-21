@@ -5,12 +5,12 @@ import {
   TBaseEvent,
   TBitrateChangedEventPayload,
   TErrorEventPayload,
+  TMetadataEventPayload,
   UUID,
 } from "@eyevinn/player-analytics-specification";
 
 export interface IPlayerAnalyticsConnectorInitOptions {
   sessionId?: string;
-  live: boolean;
   contentId: string;
   contentUrl: string;
   drmType?: string;
@@ -52,7 +52,6 @@ export class PlayerAnalyticsConnector {
 
   constructor(eventsinkUrl: string, debug?: boolean) {
     this.eventsinkUrl = eventsinkUrl;
-
     this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug);
   }
 
@@ -138,7 +137,7 @@ export class PlayerAnalyticsConnector {
     if (this.heartbeatIntervalTimer) return;
     this.heartbeatIntervalTimer = setInterval(() => {
       this.playerAnalytics.heartbeat({
-        event: "heartbeat",
+        event: EPASEvents.heartbeat,
         ...this.playbackState(),
       });
     }, this.heartbeatInterval);
@@ -177,6 +176,14 @@ export class PlayerAnalyticsConnector {
       payload: { reason: "error" },
     });
     this.stopInterval();
+  }
+
+  public reportMetadata(payload: TMetadataEventPayload) {
+    this.playerAnalytics.metadata({
+      event: EPASEvents.metadata,
+      ...this.playbackState(),
+      payload,
+    });
   }
 
   public reportWarning(payload: TErrorEventPayload) {

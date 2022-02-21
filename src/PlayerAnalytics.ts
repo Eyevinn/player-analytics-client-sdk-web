@@ -6,9 +6,9 @@ import {
   TErrorEvent,
   THeartbeatEvent,
   TInitEvent,
-  TInitEventPayload,
   TLoadedEvent,
   TLoadingEvent,
+  TMetadataEvent,
   TPausedEvent,
   TPlayingEvent,
   TSeekedEvent,
@@ -21,7 +21,6 @@ import { Reporter } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
   sessionId?: string;
-  live: boolean;
   contentId: string;
   contentUrl: string;
   drmType?: string;
@@ -29,13 +28,13 @@ export interface IPlayerAnalyticsInitOptions {
   deviceId?: string;
   deviceModel?: string;
   deviceType?: string;
+  heartbeatInterval?: number
 }
 
 export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   private debug: boolean = false;
   private eventsinkUrl: string;
   private analyticsReporter: Reporter;
-
   constructor(eventsinkUrl: string, debug?: boolean) {
     this.debug = debug;
     this.eventsinkUrl = eventsinkUrl;
@@ -44,12 +43,12 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   public async initiateAnalyticsReporter({
     sessionId,
     ...options
-  }: TInitEventPayload) {
+  }: IPlayerAnalyticsInitOptions) {
     this.analyticsReporter = new Reporter({
       sessionId,
       eventsinkUrl: this.eventsinkUrl,
       debug: this.debug,
-      heartbeatInterval: options.heartbeatInterval || HEARTBEAT_INTERVAL
+      heartbeatInterval: options.heartbeatInterval || HEARTBEAT_INTERVAL,
     });
     const { sessionId: generatedSessionId, heartbeatInterval } =
       await this.analyticsReporter.init(sessionId, options);
@@ -57,6 +56,10 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   }
 
   public init(data: TInitEvent): void {
+    this.analyticsReporter.send(data);
+  }
+
+  public metadata(data: TMetadataEvent): void {
     this.analyticsReporter.send(data);
   }
 
