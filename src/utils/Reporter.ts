@@ -20,6 +20,7 @@ export class Reporter {
   private eventsinkUrl: string;
   private sessionId?: string;
   private heartbeatInterval?: number;
+  private reporterInitiated: boolean;
   constructor(options: IReporterOptions) {
     this.debug = options.debug;
     this.eventsinkUrl = options.eventsinkUrl;
@@ -46,6 +47,7 @@ export class Reporter {
     };
     if (this.debug) {
       console.log("[AnalyticsReporter] Init session:", data);
+      this.reporterInitiated = true
       return {
         sessionId: this.sessionId,
         heartbeatInterval: this.heartbeatInterval,
@@ -80,14 +82,17 @@ export class Reporter {
       if (initResponseJson.sessionId) {
         this.sessionId = initResponseJson.sessionId;
       }
+      this.reporterInitiated = true;
       return {
         heartbeatInterval: this.heartbeatInterval,
         sessionId: this.sessionId,
+
       };
     }
   }
 
   public send(data: TPlayerAnalyticsEvent): void {
+    if (!this.reporterInitiated) return;
     const payload = {
       sessionId: this.sessionId,
       ...data,
