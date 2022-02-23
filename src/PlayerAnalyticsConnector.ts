@@ -189,11 +189,11 @@ export class PlayerAnalyticsConnector {
 
   private playbackState(): TBaseEvent {
     const playhead =
-      !this.player.currentTime && this.player.currentTime !== 0
+      !this.player?.currentTime && this.player?.currentTime !== 0
         ? -1
         : this.player.currentTime || 0;
     const duration =
-      !this.player.duration && this.player.duration !== 0
+      !this.player?.duration && this.player?.duration !== 0
         ? -1
         : this.player.duration || 0;
     return {
