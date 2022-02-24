@@ -122,3 +122,17 @@ export interface IPlayerAnalyticsInitOptions {
 ## Development
 
 Run the demo page by `npm start`
+
+## Release
+
+- Pull latest master
+- `npm version patch | minor | major`
+- This triggers an update of the version in package.json + creates a tag with that version number
+- This will automatically be pushed to Github upon success.
+- At github.com go to releases (far right)
+  - click "Draft a new release"
+  - choose your tag
+  - give it a name (preferably your version number, e.g. `v0.0.1`)
+  - click "Auto-generate release notes"
+  - click "Publish release"
+- A Github Action is triggered to do the releases towards the npmjs and github packages repositories.
