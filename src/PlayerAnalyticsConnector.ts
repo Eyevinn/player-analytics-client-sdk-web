@@ -5,36 +5,13 @@ import {
   TBaseEvent,
   TBitrateChangedEventPayload,
   TErrorEventPayload,
+  TMetadataEventPayload,
   UUID,
 } from "@eyevinn/player-analytics-specification";
 
 export interface IPlayerAnalyticsConnectorInitOptions {
   sessionId?: string;
-  live: boolean;
-  contentId: string;
-  contentUrl: string;
-  drmType?: string;
-  userId?: string;
-  deviceId?: string;
-  deviceModel?: string;
-  deviceType?: string;
-
   heartbeatInterval?: number;
-}
-
-export interface IBitrateChangedPayload {
-  bitrate: ""; // bitrate in Kbps
-  width?: ""; // video width in pixels
-  height?: ""; // video height in pixels
-  videoBitrate?: ""; // if available provide the bitrate for the video track
-  audioBitrate?: ""; // if available provide the bitrate for the audio track
-}
-
-export interface IErrorPayload {
-  category?: ""; // eg. NETWORK, DECODER, etc.
-  code: "";
-  message?: "";
-  data?: {};
 }
 
 export class PlayerAnalyticsConnector {
@@ -43,6 +20,7 @@ export class PlayerAnalyticsConnector {
   private player: HTMLVideoElement;
 
   private playerAnalytics: PlayerAnalytics;
+  private analyticsInitiated: boolean = false;
 
   private videoEventFilter: VideoEventFilter;
   private videoEventListener: any;
@@ -52,17 +30,18 @@ export class PlayerAnalyticsConnector {
 
   constructor(eventsinkUrl: string, debug?: boolean) {
     this.eventsinkUrl = eventsinkUrl;
-
     this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug);
   }
 
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {
     this.sessionId = options.sessionId;
-    const { heartbeatInterval } =
+    const { heartbeatInterval, isInitiated } =
       await this.playerAnalytics.initiateAnalyticsReporter({
         sessionId: this.sessionId,
         ...options,
       });
+
+    this.analyticsInitiated = isInitiated;
     this.heartbeatInterval = heartbeatInterval;
   }
 
@@ -138,7 +117,7 @@ export class PlayerAnalyticsConnector {
     if (this.heartbeatIntervalTimer) return;
     this.heartbeatIntervalTimer = setInterval(() => {
       this.playerAnalytics.heartbeat({
-        event: "heartbeat",
+        event: EPASEvents.heartbeat,
         ...this.playbackState(),
       });
     }, this.heartbeatInterval);
@@ -179,6 +158,14 @@ export class PlayerAnalyticsConnector {
     this.stopInterval();
   }
 
+  public reportMetadata(payload: TMetadataEventPayload) {
+    this.playerAnalytics.metadata({
+      event: EPASEvents.metadata,
+      ...this.playbackState(),
+      payload,
+    });
+  }
+
   public reportWarning(payload: TErrorEventPayload) {
     this.playerAnalytics.warning({
       event: EPASEvents.warning,
@@ -205,16 +192,20 @@ export class PlayerAnalyticsConnector {
   }
 
   public deinit() {
+    if (!this.analyticsInitiated) return;
     this.stopInterval();
     this.heartbeatInterval = null;
-    this.videoEventFilter && this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter &&
+    this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.videoEventFilter = null;
   }
-
+  
   public destroy() {
+    if (!this.analyticsInitiated) return;
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
-    this.videoEventFilter && this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter &&
+      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.stopInterval();
   }
 }
