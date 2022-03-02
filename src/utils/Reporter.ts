@@ -20,7 +20,8 @@ export class Reporter {
   private eventsinkUrl: string;
   private sessionId?: string;
   private heartbeatInterval?: number;
-  private isInitiated: boolean;
+  private isInitiated: boolean = false;
+  
   constructor(options: IReporterOptions) {
     this.debug = options.debug;
     this.eventsinkUrl = options.eventsinkUrl;
@@ -34,7 +35,6 @@ export class Reporter {
 
   public async init(
     sessionId?: string,
-    payload?: any
   ): Promise<Record<string, any>> {
     this.sessionId = sessionId || this.sessionId;
     const data: TInitEvent = {
@@ -50,6 +50,7 @@ export class Reporter {
       return {
         sessionId: this.sessionId,
         heartbeatInterval: this.heartbeatInterval,
+        isInitiated: this.isInitiated,
       };
     } else {
       const initResponse = await fetch(`${this.eventsinkUrl}`, {
@@ -67,16 +68,9 @@ export class Reporter {
         );
       }
       const initResponseJson = await initResponse.json();
+
       if (!this.sessionId && !initResponseJson.sessionId) {
         throw new Error(`[AnalyticsReporter] init failed: no sessionId`);
-      }
-      if (!this.heartbeatInterval && !initResponseJson.heartbeatInterval) {
-        throw new Error(
-          `[AnalyticsReporter] init failed: heartbeatInterval not found in response`
-        );
-      }
-      if (initResponseJson.heartbeatInterval) {
-        this.heartbeatInterval = initResponseJson.heartbeatInterval;
       }
       if (initResponseJson.sessionId) {
         this.sessionId = initResponseJson.sessionId;
@@ -85,7 +79,7 @@ export class Reporter {
       return {
         heartbeatInterval: this.heartbeatInterval,
         sessionId: this.sessionId,
-
+        isInitiated: this.isInitiated,
       };
     }
   }

@@ -21,14 +21,7 @@ import { Reporter } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
   sessionId?: string;
-  contentId: string;
-  contentUrl: string;
-  drmType?: string;
-  userId?: string;
-  deviceId?: string;
-  deviceModel?: string;
-  deviceType?: string;
-  heartbeatInterval?: number
+  heartbeatInterval?: number;
 }
 
 export class PlayerAnalytics implements PlayerAnalyticsClientModule {
@@ -42,18 +35,19 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
 
   public async initiateAnalyticsReporter({
     sessionId,
-    ...options
+    heartbeatInterval = HEARTBEAT_INTERVAL,
   }: IPlayerAnalyticsInitOptions) {
     this.analyticsReporter = new Reporter({
       sessionId,
       eventsinkUrl: this.eventsinkUrl,
       debug: this.debug,
-      heartbeatInterval: options.heartbeatInterval || HEARTBEAT_INTERVAL,
+      heartbeatInterval,
     });
-    delete options.heartbeatInterval; // this should not be sent along as payload to the eventsink
-    const { sessionId: generatedSessionId, heartbeatInterval } =
-      await this.analyticsReporter.init(sessionId, options);
-    return { sessionId: generatedSessionId, heartbeatInterval };
+
+    const { sessionId: generatedSessionId, isInitiated } =
+      await this.analyticsReporter.init(sessionId);
+
+    return { sessionId: generatedSessionId, heartbeatInterval, isInitiated };
   }
 
   public init(data: TInitEvent): void {

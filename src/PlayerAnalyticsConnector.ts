@@ -11,30 +11,7 @@ import {
 
 export interface IPlayerAnalyticsConnectorInitOptions {
   sessionId?: string;
-  contentId: string;
-  contentUrl: string;
-  drmType?: string;
-  userId?: string;
-  deviceId?: string;
-  deviceModel?: string;
-  deviceType?: string;
-
   heartbeatInterval?: number;
-}
-
-export interface IBitrateChangedPayload {
-  bitrate: ""; // bitrate in Kbps
-  width?: ""; // video width in pixels
-  height?: ""; // video height in pixels
-  videoBitrate?: ""; // if available provide the bitrate for the video track
-  audioBitrate?: ""; // if available provide the bitrate for the audio track
-}
-
-export interface IErrorPayload {
-  category?: ""; // eg. NETWORK, DECODER, etc.
-  code: "";
-  message?: "";
-  data?: {};
 }
 
 export class PlayerAnalyticsConnector {
@@ -43,6 +20,7 @@ export class PlayerAnalyticsConnector {
   private player: HTMLVideoElement;
 
   private playerAnalytics: PlayerAnalytics;
+  private analyticsInitiated: boolean = false;
 
   private videoEventFilter: VideoEventFilter;
   private videoEventListener: any;
@@ -57,11 +35,13 @@ export class PlayerAnalyticsConnector {
 
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {
     this.sessionId = options.sessionId;
-    const { heartbeatInterval } =
+    const { heartbeatInterval, isInitiated } =
       await this.playerAnalytics.initiateAnalyticsReporter({
         sessionId: this.sessionId,
         ...options,
       });
+
+    this.analyticsInitiated = isInitiated;
     this.heartbeatInterval = heartbeatInterval;
   }
 
@@ -212,16 +192,20 @@ export class PlayerAnalyticsConnector {
   }
 
   public deinit() {
+    if (!this.analyticsInitiated) return;
     this.stopInterval();
     this.heartbeatInterval = null;
-    this.videoEventFilter && this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter &&
+    this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.videoEventFilter = null;
   }
-
+  
   public destroy() {
+    if (!this.analyticsInitiated) return;
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
-    this.videoEventFilter && this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter &&
+      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.stopInterval();
   }
 }

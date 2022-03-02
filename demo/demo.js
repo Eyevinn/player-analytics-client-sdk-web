@@ -2,11 +2,8 @@ import { PlayerAnalyticsConnector } from "../index.ts";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.querySelector("video");
-
   const streamUrl =
-    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4";
-  videoElement.src = streamUrl;
-
+  "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4";
   const eventsinkUrl = "https://sink.epas.eyevinn.technology/";
   const debug = false;
 
@@ -14,10 +11,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     await analytics.init({
       sessionId: `demo-page-${Date.now()}`,
-      heartbeatInterval: 5000, //defaults to 30_000
+      heartbeatInterval: 10_000, //defaults to 30_000
     });
+    //You want to load your streamsource to your player after you've tried to init your analytics
+    videoElement.src = streamUrl;
     analytics.load(videoElement);
-    //can be reported anytime between 'init' and 'stopped'.
+
     analytics.reportMetadata({
       live: false,
       contentId: "BBB",
@@ -26,10 +25,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (err) {
     console.error(err);
     analytics.deinit();
-    return
+    return;
   }
-
-  videoElement.addEventListener("canplay", () => {
-    videoElement.play();
-  });
 });
