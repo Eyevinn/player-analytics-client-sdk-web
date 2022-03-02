@@ -1,4 +1,4 @@
-import { TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
+import { TInitEvent, TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
 import { HEARTBEAT_INTERVAL } from "./constants";
 
 export interface IReporterOptions {
@@ -37,13 +37,12 @@ export class Reporter {
     payload?: any
   ): Promise<Record<string, any>> {
     this.sessionId = sessionId || this.sessionId;
-    const data = {
+    const data: TInitEvent = {
       event: "init",
       sessionId: this.sessionId,
       timestamp: Date.now(),
       playhead: -1,
       duration: -1,
-      payload,
     };
     if (this.debug) {
       console.log("[AnalyticsReporter] Init session:", data);
