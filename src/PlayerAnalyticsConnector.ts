@@ -196,11 +196,11 @@ export class PlayerAnalyticsConnector {
 
   private playbackState(): TBaseEvent {
     const playhead =
-      !this.player.currentTime && this.player.currentTime !== 0
+      !this.player?.currentTime && this.player?.currentTime !== 0
         ? -1
         : this.player.currentTime || 0;
     const duration =
-      !this.player.duration && this.player.duration !== 0
+      !this.player?.duration && this.player?.duration !== 0
         ? -1
         : this.player.duration || 0;
     return {
@@ -214,14 +214,14 @@ export class PlayerAnalyticsConnector {
   public deinit() {
     this.stopInterval();
     this.heartbeatInterval = null;
-    this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter && this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.videoEventFilter = null;
   }
 
   public destroy() {
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
-    this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter && this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.stopInterval();
   }
 }
