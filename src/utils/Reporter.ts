@@ -1,5 +1,5 @@
 import { TInitEvent, TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
-import { HEARTBEAT_INTERVAL } from "./constants";
+import { EPAS_VERSION, HEARTBEAT_INTERVAL } from "./constants";
 
 export interface IReporterOptions {
   eventsinkUrl: string;
@@ -59,6 +59,8 @@ export class Reporter {
         cache: "no-cache",
         headers: {
           "Content-Type": "application/json; charset=utf-8",
+          "X-EPAS-Event": data.event,
+          "X-EPAS-Version": EPAS_VERSION,
         },
         body: JSON.stringify(data),
       });
@@ -99,6 +101,8 @@ export class Reporter {
         cache: "no-cache",
         headers: {
           "Content-Type": "application/json; charset=utf-8",
+          "X-EPAS-Event": data.event,
+          "X-EPAS-Version": EPAS_VERSION,
         },
         body: JSON.stringify(payload),
       });
