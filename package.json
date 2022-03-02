@@ -1,7 +1,7 @@
 {
   "name": "@eyevinn/player-analytics-client-sdk-web",
   "version": "0.0.15",
-  "description": "",
+  "description": "EPAS Client SDK for Web",
   "source": "index.ts",
   "main": "dist/index.js",
   "module": "dist/module.js",
@@ -19,7 +19,7 @@
   },
   "keywords": [],
   "author": "erik.hoffman@eyevinn.se",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/Eyevinn/player-analytics-client-sdk-web/issues"
   },
