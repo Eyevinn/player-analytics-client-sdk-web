@@ -14,14 +14,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       heartbeatInterval: 10_000, //defaults to 30_000
     });
     //You want to load your streamsource to your player after you've tried to init your analytics
-    videoElement.src = streamUrl;
     analytics.load(videoElement);
+    videoElement.src = streamUrl;
 
     analytics.reportMetadata({
       live: false,
       contentId: "BBB",
       contentUrl: videoElement.src,
     });
+    
   } catch (err) {
     console.error(err);
     analytics.deinit();
