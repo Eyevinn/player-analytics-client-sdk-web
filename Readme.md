@@ -18,18 +18,24 @@ const playerAnalytics = new PlayerAnalyticsConnector("https://your-eventsink-url
 
 // Initiate the analytics with the base data needed
 // This will create you session in the backend
-await playerAnalytics.init({
-  sessionId: "generated-unique-uuid-session-id",
-  live: false,
-  contentId: "big-buck-bunny-720",
-  contentUrl:
-    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4",
-});
+try {
+  await playerAnalytics.init({
+    sessionId: "generated-unique-uuid-session-id",
+    live: false,
+    contentId: "big-buck-bunny-720",
+    contentUrl:
+      "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4",
+  });
 
-// Get you video element from the site, or your video player of choice
-const videoElement = document.querySelector("video");
-// Load the analytics library with the video element to fetch the events
-playerAnalytics.load(videoElement);
+  // Get you video element from the site, or your video player of choice
+  const videoElement = document.querySelector("video");
+  // Load the analytics library with the video element to fetch the events
+  playerAnalytics.load(videoElement);
+} catch (err) {
+  console.error(err);
+  // Remove event listeners and heartbeat timers if init fails.
+  playerAnalytics.deinit();
+}
 ```
 
 Due to bitrate changes not being reported, and errors not being reported in any descriptive way, there is a possibility to do separate calls for these events - which you may trigger based on you video player of choice following these examples.
