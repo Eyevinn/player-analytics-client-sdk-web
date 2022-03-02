@@ -15,17 +15,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     //You want to load your streamsource to your player after you've tried to init your analytics
     analytics.load(videoElement);
-    videoElement.src = streamUrl;
-
-    analytics.reportMetadata({
-      live: false,
-      contentId: "BBB",
-      contentUrl: videoElement.src,
-    });
-    
   } catch (err) {
     console.error(err);
     analytics.deinit();
-    return;
   }
+  videoElement.src = streamUrl;
+
+  analytics.reportMetadata({
+    live: false,
+    contentId: "BBB",
+    contentUrl: videoElement.src,
+  });
 });
