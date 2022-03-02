@@ -1,6 +1,6 @@
 {
   "name": "@eyevinn/player-analytics-client-sdk-web",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "EPAS Client SDK for Web",
   "source": "index.ts",
   "main": "dist/index.js",
