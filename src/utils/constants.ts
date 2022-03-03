@@ -18,5 +18,5 @@ export enum EPASEvents {
 
 export const HEARTBEAT_INTERVAL = 30000;
 
-const { version } = require("../../node_modules/@eyevinn/player-analytics-specification/package.json");
-export const EPAS_VERSION = version;
+import packageJson from "@eyevinn/player-analytics-specification/package.json";
+export const EPAS_VERSION = packageJson.version;
