@@ -3,7 +3,7 @@ import { PlayerAnalyticsConnector } from "../index.ts";
 document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.querySelector("video");
   const streamUrl =
-  "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4";
+  "https://testcontent.eyevinn.technology/mp4/VINN.mp4";
   const eventsinkUrl = "https://sink.epas.eyevinn.technology/";
   const debug = false;
 
