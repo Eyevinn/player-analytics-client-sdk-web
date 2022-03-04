@@ -40,7 +40,7 @@ Due to bitrate changes not being reported, and errors not being reported in any 
 
 ```js
 playerAnalytics.reportBitrateChange({
-  bitrate: 246440, // bitrate in Kbps
+  bitrate: 246.440, // bitrate in Kbps
   width: 320, // optional, video width in pixels
   height: 136, // optional, video height in pixels
   videoBitrate: 0, // optional, if available provide the bitrate for the video track
