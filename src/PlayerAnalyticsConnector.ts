@@ -20,7 +20,7 @@ export class PlayerAnalyticsConnector {
   private player: HTMLVideoElement;
 
   private playerAnalytics: PlayerAnalytics;
-  private analyticsInitiated: boolean = false;
+  private analyticsInitiated = false;
 
   private videoEventFilter: VideoEventFilter;
   private videoEventListener: any;
@@ -223,7 +223,7 @@ export class PlayerAnalyticsConnector {
     this.stopInterval();
     this.heartbeatInterval = null;
     this.videoEventFilter &&
-    this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.videoEventFilter = null;
   }
 

@@ -1,4 +1,7 @@
-import { TInitEvent, TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
+import {
+  TInitEvent,
+  TPlayerAnalyticsEvent,
+} from "@eyevinn/player-analytics-specification";
 import { EPAS_VERSION, HEARTBEAT_INTERVAL } from "./constants";
 
 export interface IReporterOptions {
@@ -20,8 +23,8 @@ export class Reporter {
   private eventsinkUrl: string;
   private sessionId?: string;
   private heartbeatInterval?: number;
-  private isInitiated: boolean = false;
-  
+  private isInitiated = false;
+
   constructor(options: IReporterOptions) {
     this.debug = options.debug;
     this.eventsinkUrl = options.eventsinkUrl;
@@ -33,9 +36,7 @@ export class Reporter {
     }
   }
 
-  public async init(
-    sessionId?: string,
-  ): Promise<Record<string, any>> {
+  public async init(sessionId?: string): Promise<Record<string, any>> {
     this.sessionId = sessionId || this.sessionId;
     const data: TInitEvent = {
       event: "init",
@@ -46,7 +47,7 @@ export class Reporter {
     };
     if (this.debug) {
       console.log("[AnalyticsReporter] Init session:", data);
-      this.isInitiated = true
+      this.isInitiated = true;
       return {
         sessionId: this.sessionId,
         heartbeatInterval: this.heartbeatInterval,
@@ -87,7 +88,11 @@ export class Reporter {
   }
 
   public send(data: TPlayerAnalyticsEvent): void {
-    if (!this.isInitiated) return console.warn("[AnalyticsReporter] Cannot report before initiation:", data);
+    if (!this.isInitiated)
+      return console.warn(
+        "[AnalyticsReporter] Cannot report before initiation:",
+        data
+      );
     const payload = {
       sessionId: this.sessionId,
       ...data,

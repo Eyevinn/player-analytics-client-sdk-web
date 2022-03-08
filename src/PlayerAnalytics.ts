@@ -25,7 +25,7 @@ export interface IPlayerAnalyticsInitOptions {
 }
 
 export class PlayerAnalytics implements PlayerAnalyticsClientModule {
-  private debug: boolean = false;
+  private debug = false;
   private eventsinkUrl: string;
   private analyticsReporter: Reporter;
   constructor(eventsinkUrl: string, debug?: boolean) {
