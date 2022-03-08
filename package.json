@@ -39,6 +39,6 @@
   },
   "dependencies": {
     "@eyevinn/player-analytics-specification": "0.3.1",
-    "@eyevinn/video-event-filter": "^1.1.4"
+    "@eyevinn/video-event-filter": "^1.1.5"
   }
 }
