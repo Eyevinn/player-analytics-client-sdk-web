@@ -104,6 +104,10 @@ export class PlayerAnalyticsConnector {
           default:
             break;
         }
+        if (!this.analyticsInitiated) {
+          console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+          return;
+        }
         this.playerAnalytics[eventType]({
           event: eventType,
           ...this.playbackState(),
@@ -128,6 +132,10 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportBitrateChange(payload: TBitrateChangedEventPayload) {
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.playerAnalytics.bitrateChanged({
       event: EPASEvents.bitratechanged,
       ...this.playbackState(),
@@ -136,6 +144,10 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportStop() {
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.playerAnalytics.stopped({
       event: EPASEvents.ended,
       ...this.playbackState(),
@@ -145,6 +157,10 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportError(error: TErrorEventPayload) {
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.playerAnalytics.error({
       event: EPASEvents.error,
       ...this.playbackState(),
@@ -159,6 +175,10 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportMetadata(payload: TMetadataEventPayload) {
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.playerAnalytics.metadata({
       event: EPASEvents.metadata,
       ...this.playbackState(),
@@ -167,6 +187,10 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportWarning(payload: TErrorEventPayload) {
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.playerAnalytics.warning({
       event: EPASEvents.warning,
       ...this.playbackState(),
@@ -192,16 +216,22 @@ export class PlayerAnalyticsConnector {
   }
 
   public deinit() {
-    if (!this.analyticsInitiated) return;
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.stopInterval();
     this.heartbeatInterval = null;
     this.videoEventFilter &&
     this.videoEventFilter.removeEventListener("*", this.videoEventListener);
     this.videoEventFilter = null;
   }
-  
+
   public destroy() {
-    if (!this.analyticsInitiated) return;
+    if (!this.analyticsInitiated) {
+      console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+      return;
+    }
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
     this.videoEventFilter &&
