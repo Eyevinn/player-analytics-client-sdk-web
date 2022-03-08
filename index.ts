@@ -3,4 +3,7 @@ export {
   IPlayerAnalyticsInitOptions,
 } from "./src/PlayerAnalytics";
 
-export { PlayerAnalyticsConnector, IPlayerAnalyticsConnectorInitOptions } from "./src/PlayerAnalyticsConnector";
+export {
+  PlayerAnalyticsConnector,
+  IPlayerAnalyticsConnectorInitOptions,
+} from "./src/PlayerAnalyticsConnector";

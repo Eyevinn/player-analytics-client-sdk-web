@@ -1,7 +1,6 @@
 env:
   browser: true
   es6: true
-  jest/globals: true
 
 extends:
   - eslint-config-prettier
@@ -11,7 +10,6 @@ extends:
 
 plugins:
   - prettier
-  - jest
   - "@typescript-eslint"
 
 globals:
