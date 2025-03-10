@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.querySelector("video");
   const streamUrl =
   "https://testcontent.eyevinn.technology/mp4/VINN.mp4";
-  const eventsinkUrl = "https://sink.epas.eyevinn.technology/";
+  const eventsinkUrl = "https://eyevinnlab-guidetest.eyevinn-player-analytics-eventsink.auto.prod.osaas.io";
   const debug = false;
 
   const analytics = new PlayerAnalyticsConnector(eventsinkUrl, debug);
