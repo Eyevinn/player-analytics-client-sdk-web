@@ -1,4 +1,8 @@
-import { VideoEventFilter, PlayerEvents } from "@eyevinn/video-event-filter";
+import {
+  getMediaEventFilter,
+  FilteredMediaEvent,
+  TMediaEventFilter,
+} from "@eyevinn/media-event-filter";
 import { EPASEvents } from "./utils/constants";
 import { PlayerAnalytics } from "./PlayerAnalytics";
 import {
@@ -22,7 +26,7 @@ export class PlayerAnalyticsConnector {
   private playerAnalytics: PlayerAnalytics;
   private analyticsInitiated = false;
 
-  private videoEventFilter: VideoEventFilter;
+  private videoEventFilter: TMediaEventFilter;
   private videoEventListener: any;
 
   private heartbeatInterval: number;
@@ -56,49 +60,41 @@ export class PlayerAnalyticsConnector {
 
   private initiateVideoEventFilter() {
     if (!this.player) return;
-    this.videoEventFilter = new VideoEventFilter(this.player);
-    this.videoEventFilter.addEventListener(
-      "*",
-      (this.videoEventListener = (event: PlayerEvents) => {
-        if (!Object.keys(EPASEvents).includes(event)) return;
+    this.videoEventFilter = getMediaEventFilter({
+      mediaElement: this.player,
+      mp4Mode: false,
+      callback: (event: FilteredMediaEvent) => {
         let eventType;
         const extraData = {};
-        if (!event) return;
         switch (event) {
-          case PlayerEvents.Loaded:
+          case FilteredMediaEvent.LOADED:
             eventType = EPASEvents.loaded;
             break;
-          case PlayerEvents.Loading:
-            eventType = EPASEvents.loading;
-            break;
-          case PlayerEvents.Play:
-          case PlayerEvents.Resume:
+          case FilteredMediaEvent.PLAY:
             eventType = EPASEvents.play;
             this.startInterval();
             break;
-          case PlayerEvents.Pause:
+          case FilteredMediaEvent.PLAYING:
+            eventType = EPASEvents.resume;
+            break;
+          case FilteredMediaEvent.PAUSE:
             eventType = EPASEvents.pause;
             break;
-          case PlayerEvents.Seeking:
+          case FilteredMediaEvent.SEEKING:
             eventType = EPASEvents.seeking;
             break;
-          case PlayerEvents.Seeked:
+          case FilteredMediaEvent.SEEKED:
             eventType = EPASEvents.seeked;
             break;
-          case PlayerEvents.Buffering:
+          case FilteredMediaEvent.BUFFERING:
             eventType = EPASEvents.buffering;
             break;
-          case PlayerEvents.Buffered:
+          case FilteredMediaEvent.BUFFERED:
             eventType = EPASEvents.buffered;
             break;
-          case PlayerEvents.Ended:
+          case FilteredMediaEvent.ENDED:
             eventType = EPASEvents.ended;
             (extraData as any).reason = "ended";
-            this.stopInterval();
-            break;
-          case PlayerEvents.Error:
-            eventType = EPASEvents.error;
-            (extraData as any).reason = "error";
             this.stopInterval();
             break;
           default:
@@ -113,8 +109,8 @@ export class PlayerAnalyticsConnector {
           ...this.playbackState(),
           ...(Object.keys(extraData).length > 0 && { payload: extraData }),
         });
-      })
-    );
+      },
+    });
   }
 
   private startInterval() {
@@ -224,8 +220,7 @@ export class PlayerAnalyticsConnector {
     }
     this.stopInterval();
     this.heartbeatInterval = null;
-    this.videoEventFilter &&
-      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
   }
 
@@ -236,8 +231,7 @@ export class PlayerAnalyticsConnector {
     }
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
-    this.videoEventFilter &&
-      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter && this.videoEventFilter.teardown();
     this.stopInterval();
   }
 }
