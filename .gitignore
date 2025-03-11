@@ -144,3 +144,4 @@ dist/
 .vscode/
 scripts/
 .parcel-cache/
+site/

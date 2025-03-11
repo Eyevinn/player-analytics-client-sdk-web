@@ -7,7 +7,7 @@
   "module": "dist/module.js",
   "types": "dist/types.d.ts",
   "scripts": {
-    "start": "parcel demo/index.html",
+    "start": "parcel --dist-dir=site --public-url=/epasdev demo/index.html",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
     "prepare": "npm run build",
     "prettier": "prettier --write './src/**/*.{ts,js,json,html}'",
