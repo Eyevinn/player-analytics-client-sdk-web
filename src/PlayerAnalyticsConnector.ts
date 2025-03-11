@@ -1,10 +1,14 @@
-import { VideoEventFilter, PlayerEvents } from "@eyevinn/video-event-filter";
-import { EPASEvents } from "./utils/constants";
+import {
+  getMediaEventFilter,
+  FilteredMediaEvent,
+  TMediaEventFilter,
+} from "@eyevinn/media-event-filter";
 import { PlayerAnalytics } from "./PlayerAnalytics";
 import {
   TBaseEvent,
   TBitrateChangedEventPayload,
   TErrorEventPayload,
+  TEventType,
   TMetadataEventPayload,
   UUID,
 } from "@eyevinn/player-analytics-specification";
@@ -22,7 +26,7 @@ export class PlayerAnalyticsConnector {
   private playerAnalytics: PlayerAnalytics;
   private analyticsInitiated = false;
 
-  private videoEventFilter: VideoEventFilter;
+  private videoEventFilter: TMediaEventFilter;
   private videoEventListener: any;
 
   private heartbeatInterval: number;
@@ -48,7 +52,7 @@ export class PlayerAnalyticsConnector {
   public load(player: HTMLVideoElement) {
     this.player = player;
     this.playerAnalytics.loading({
-      event: EPASEvents.loading,
+      event: "loading",
       ...this.playbackState(),
     });
     this.initiateVideoEventFilter();
@@ -56,72 +60,67 @@ export class PlayerAnalyticsConnector {
 
   private initiateVideoEventFilter() {
     if (!this.player) return;
-    this.videoEventFilter = new VideoEventFilter(this.player);
-    this.videoEventFilter.addEventListener(
-      "*",
-      (this.videoEventListener = (event: PlayerEvents) => {
-        if (!Object.keys(EPASEvents).includes(event)) return;
-        let eventType;
+    this.videoEventFilter = getMediaEventFilter({
+      mediaElement: this.player,
+      mp4Mode: false,
+      callback: (event: FilteredMediaEvent) => {
+        let eventType: TEventType;
         const extraData = {};
-        if (!event) return;
         switch (event) {
-          case PlayerEvents.Loaded:
-            eventType = EPASEvents.loaded;
+          case FilteredMediaEvent.LOADED:
+            eventType = "loaded";
             break;
-          case PlayerEvents.Loading:
-            eventType = EPASEvents.loading;
-            break;
-          case PlayerEvents.Play:
-          case PlayerEvents.Resume:
-            eventType = EPASEvents.play;
+          case FilteredMediaEvent.PLAYING:
+            eventType = "playing";
             this.startInterval();
             break;
-          case PlayerEvents.Pause:
-            eventType = EPASEvents.pause;
+          case FilteredMediaEvent.PAUSE:
+            eventType = "paused";
             break;
-          case PlayerEvents.Seeking:
-            eventType = EPASEvents.seeking;
+          case FilteredMediaEvent.SEEKING:
+            eventType = "seeking";
             break;
-          case PlayerEvents.Seeked:
-            eventType = EPASEvents.seeked;
+          case FilteredMediaEvent.SEEKED:
+            eventType = "seeked";
             break;
-          case PlayerEvents.Buffering:
-            eventType = EPASEvents.buffering;
+          case FilteredMediaEvent.BUFFERING:
+            eventType = "buffering";
             break;
-          case PlayerEvents.Buffered:
-            eventType = EPASEvents.buffered;
+          case FilteredMediaEvent.BUFFERED:
+            eventType = "buffered";
             break;
-          case PlayerEvents.Ended:
-            eventType = EPASEvents.ended;
-            (extraData as any).reason = "ended";
-            this.stopInterval();
-            break;
-          case PlayerEvents.Error:
-            eventType = EPASEvents.error;
-            (extraData as any).reason = "error";
+          case FilteredMediaEvent.ENDED:
+            eventType = "stopped";
+            extraData["reason"] = "ended";
             this.stopInterval();
             break;
           default:
             break;
         }
-        if (!this.analyticsInitiated) {
-          console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
-          return;
+        try {
+          if (!this.analyticsInitiated) {
+            console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+            return;
+          }
+          if (eventType) {
+            this.playerAnalytics[eventType == "paused" ? "pause" : eventType]({
+              event: eventType,
+              ...this.playbackState(),
+              ...(Object.keys(extraData).length > 0 && { payload: extraData }),
+            });
+          }
+        } catch (err) {
+          console.error(err);
         }
-        this.playerAnalytics[eventType]({
-          event: eventType,
-          ...this.playbackState(),
-          ...(Object.keys(extraData).length > 0 && { payload: extraData }),
-        });
-      })
-    );
+      },
+    });
   }
 
   private startInterval() {
     if (this.heartbeatIntervalTimer) return;
     this.heartbeatIntervalTimer = setInterval(() => {
       this.playerAnalytics.heartbeat({
-        event: EPASEvents.heartbeat,
+        event: "heartbeat",
         ...this.playbackState(),
       });
     }, this.heartbeatInterval);
@@ -137,7 +136,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.bitrateChanged({
-      event: EPASEvents.bitratechanged,
+      event: "bitrate_changed",
       ...this.playbackState(),
       payload,
     });
@@ -149,7 +148,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.stopped({
-      event: EPASEvents.ended,
+      event: "stopped",
       ...this.playbackState(),
       payload: { reason: "aborted" },
     });
@@ -162,12 +161,12 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.error({
-      event: EPASEvents.error,
+      event: "error",
       ...this.playbackState(),
       payload: error,
     });
     this.playerAnalytics.stopped({
-      event: EPASEvents.ended,
+      event: "stopped",
       ...this.playbackState(),
       payload: { reason: "error" },
     });
@@ -180,7 +179,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.metadata({
-      event: EPASEvents.metadata,
+      event: "metadata",
       ...this.playbackState(),
       payload,
     });
@@ -192,7 +191,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.warning({
-      event: EPASEvents.warning,
+      event: "warning",
       ...this.playbackState(),
       payload,
     });
@@ -224,8 +223,7 @@ export class PlayerAnalyticsConnector {
     }
     this.stopInterval();
     this.heartbeatInterval = null;
-    this.videoEventFilter &&
-      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
   }
 
@@ -236,8 +234,7 @@ export class PlayerAnalyticsConnector {
     }
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
-    this.videoEventFilter &&
-      this.videoEventFilter.removeEventListener("*", this.videoEventListener);
+    this.videoEventFilter && this.videoEventFilter.teardown();
     this.stopInterval();
   }
 }

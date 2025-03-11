@@ -74,10 +74,6 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
     this.analyticsReporter.send(data);
   }
 
-  public paused(data: TPausedEvent): void {
-    this.pause(data);
-  }
-
   public pause(data: TPausedEvent): void {
     this.analyticsReporter.send(data);
   }
