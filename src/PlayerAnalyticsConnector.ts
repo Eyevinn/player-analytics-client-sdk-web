@@ -3,12 +3,12 @@ import {
   FilteredMediaEvent,
   TMediaEventFilter,
 } from "@eyevinn/media-event-filter";
-import { EPASEvents } from "./utils/constants";
 import { PlayerAnalytics } from "./PlayerAnalytics";
 import {
   TBaseEvent,
   TBitrateChangedEventPayload,
   TErrorEventPayload,
+  TEventType,
   TMetadataEventPayload,
   UUID,
 } from "@eyevinn/player-analytics-specification";
@@ -52,7 +52,7 @@ export class PlayerAnalyticsConnector {
   public load(player: HTMLVideoElement) {
     this.player = player;
     this.playerAnalytics.loading({
-      event: EPASEvents.loading,
+      event: "loading",
       ...this.playbackState(),
     });
     this.initiateVideoEventFilter();
@@ -64,51 +64,54 @@ export class PlayerAnalyticsConnector {
       mediaElement: this.player,
       mp4Mode: false,
       callback: (event: FilteredMediaEvent) => {
-        let eventType;
+        let eventType: TEventType;
         const extraData = {};
         switch (event) {
           case FilteredMediaEvent.LOADED:
-            eventType = EPASEvents.loaded;
-            break;
-          case FilteredMediaEvent.PLAY:
-            eventType = EPASEvents.play;
-            this.startInterval();
+            eventType = "loaded";
             break;
           case FilteredMediaEvent.PLAYING:
-            eventType = EPASEvents.resume;
+            eventType = "playing";
+            this.startInterval();
             break;
           case FilteredMediaEvent.PAUSE:
-            eventType = EPASEvents.pause;
+            eventType = "paused";
             break;
           case FilteredMediaEvent.SEEKING:
-            eventType = EPASEvents.seeking;
+            eventType = "seeking";
             break;
           case FilteredMediaEvent.SEEKED:
-            eventType = EPASEvents.seeked;
+            eventType = "seeked";
             break;
           case FilteredMediaEvent.BUFFERING:
-            eventType = EPASEvents.buffering;
+            eventType = "buffering";
             break;
           case FilteredMediaEvent.BUFFERED:
-            eventType = EPASEvents.buffered;
+            eventType = "buffered";
             break;
           case FilteredMediaEvent.ENDED:
-            eventType = EPASEvents.ended;
-            (extraData as any).reason = "ended";
+            eventType = "stopped";
+            extraData["reason"] = "ended";
             this.stopInterval();
             break;
           default:
             break;
         }
-        if (!this.analyticsInitiated) {
-          console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
-          return;
+        try {
+          if (!this.analyticsInitiated) {
+            console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+            return;
+          }
+          if (eventType) {
+            this.playerAnalytics[eventType == "paused" ? "pause" : eventType]({
+              event: eventType,
+              ...this.playbackState(),
+              ...(Object.keys(extraData).length > 0 && { payload: extraData }),
+            });
+          }
+        } catch (err) {
+          console.error(err);
         }
-        this.playerAnalytics[eventType]({
-          event: eventType,
-          ...this.playbackState(),
-          ...(Object.keys(extraData).length > 0 && { payload: extraData }),
-        });
       },
     });
   }
@@ -117,7 +120,7 @@ export class PlayerAnalyticsConnector {
     if (this.heartbeatIntervalTimer) return;
     this.heartbeatIntervalTimer = setInterval(() => {
       this.playerAnalytics.heartbeat({
-        event: EPASEvents.heartbeat,
+        event: "heartbeat",
         ...this.playbackState(),
       });
     }, this.heartbeatInterval);
@@ -133,7 +136,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.bitrateChanged({
-      event: EPASEvents.bitratechanged,
+      event: "bitrate_changed",
       ...this.playbackState(),
       payload,
     });
@@ -145,7 +148,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.stopped({
-      event: EPASEvents.ended,
+      event: "stopped",
       ...this.playbackState(),
       payload: { reason: "aborted" },
     });
@@ -158,12 +161,12 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.error({
-      event: EPASEvents.error,
+      event: "error",
       ...this.playbackState(),
       payload: error,
     });
     this.playerAnalytics.stopped({
-      event: EPASEvents.ended,
+      event: "stopped",
       ...this.playbackState(),
       payload: { reason: "error" },
     });
@@ -176,7 +179,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.metadata({
-      event: EPASEvents.metadata,
+      event: "metadata",
       ...this.playbackState(),
       payload,
     });
@@ -188,7 +191,7 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.playerAnalytics.warning({
-      event: EPASEvents.warning,
+      event: "warning",
       ...this.playbackState(),
       payload,
     });
