@@ -1,10 +1,20 @@
 # Player Analytics Client SDK Web
 
-Part of [Eyevinn Player Analytics Specification](https://github.com/Eyevinn/player-analytics-specification). To be used together with [Eyevinn Player Analytics Eventsink](https://github.com/Eyevinn/player-analytics-eventsink)
+Part of [Eyevinn Player Analytics Specification (EPAS)](https://github.com/Eyevinn/player-analytics-specification). To be used together with [Eyevinn Player Analytics Eventsink](https://github.com/Eyevinn/player-analytics-eventsink)
 
 ```
 npm install @eyevinn/player-analytics-client-sdk-web
 ```
+
+## EPAS backend in Open Source Cloud
+
+The quickest way to get started is to setup an EPAS compatible backend in [Eyevinn Open Source Cloud](https://www.osaas.io)
+
+![EPAS pipeline in OSC](pipeline.png)
+
+1. Setup an Eventsink in OSC as described in the [documentation](https://docs.osaas.io/osaas.wiki/Service%3A-Player-Analytics-Eventsink.html).
+2. Setup an Analytics Worker and Clickhouse Database by following the instructions in the [documentation](https://docs.osaas.io/osaas.wiki/Service%3A-Player-Analytics-Worker.html)
+3. Add Clickhouse as datasource in Grafana and start visualizing the metrics
 
 ## Usage
 
