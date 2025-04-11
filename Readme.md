@@ -1,10 +1,22 @@
+[![Badge OSC](https://img.shields.io/badge/Evaluate-24243B?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9InVybCgjcGFpbnQwX2xpbmVhcl8yODIxXzMxNjcyKSIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI3IiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjIiLz4KPGRlZnM%2BCjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQwX2xpbmVhcl8yODIxXzMxNjcyIiB4MT0iMTIiIHkxPSIwIiB4Mj0iMTIiIHkyPSIyNCIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjQzE4M0ZGIi8%2BCjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzREQzlGRiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM%2BCjwvc3ZnPgo%3D)](https://app.osaas.io/browse/eyevinn-player-analytics-eventsink)
+
 # Player Analytics Client SDK Web
 
-Part of [Eyevinn Player Analytics Specification](https://github.com/Eyevinn/player-analytics-specification). To be used together with [Eyevinn Player Analytics Eventsink](https://github.com/Eyevinn/player-analytics-eventsink)
+Part of [Eyevinn Player Analytics Specification (EPAS)](https://github.com/Eyevinn/player-analytics-specification). To be used together with [Eyevinn Player Analytics Eventsink](https://github.com/Eyevinn/player-analytics-eventsink)
 
 ```
 npm install @eyevinn/player-analytics-client-sdk-web
 ```
+
+## EPAS backend in Open Source Cloud
+
+The quickest way to get started is to setup an EPAS compatible backend in [Eyevinn Open Source Cloud](https://www.osaas.io)
+
+![EPAS pipeline in OSC](pipeline.png)
+
+1. Setup an Eventsink in OSC as described in the [documentation](https://docs.osaas.io/osaas.wiki/Service%3A-Player-Analytics-Eventsink.html).
+2. Setup an Analytics Worker and Clickhouse Database by following the instructions in the [documentation](https://docs.osaas.io/osaas.wiki/Service%3A-Player-Analytics-Worker.html)
+3. Add Clickhouse as datasource in Grafana and start visualizing the metrics
 
 ## Usage
 
