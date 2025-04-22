@@ -198,7 +198,7 @@ Read our blogs and articles here:
 
 - [Developer blogs](https://dev.to/video)
 - [Medium](https://eyevinntechnology.medium.com/)
-- [OSC](https://osaas.io/)
+- [OSC](https://blog.osaas.io)
 - [LinkedIn](https://www.linkedin.com/company/eyevinn/)
 
 Want to know more about Eyevinn, contact us at [info@eyevinn.se](mailto:info@eyevinn.se)!
