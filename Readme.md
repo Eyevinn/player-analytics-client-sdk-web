@@ -187,3 +187,19 @@ Run the demo page by `npm start`
   - click "Auto-generate release notes"
   - click "Publish release"
 - A Github Action is triggered to do the releases towards the npmjs and github packages repositories.
+<br/>
+<br/>
+# About Eyevinn
+We are [Eyevinn Technology](https://www.eyevinntechnology.se/), and we help companies in the TV, media, and entertainment sectors optimize costs and boost profitability through enhanced media solutions. We are independent in a way that we are not commercially tied to any platform or technology vendor. As our way to innovate and push the industry forward, we develop proof-of-concepts and tools. We share things we have learn and code as open-source.
+
+With Eyevinn Open Source Cloud we enable to build solutions and applications based on Open Web Services and avoid being locked in with a single web service vendor. Our open-source solutions offer full flexibility with a revenue share model that supports the creators.
+
+Read our blogs and articles here:
+
+- [Developer blogs](https://dev.to/video)
+- [Medium](https://eyevinntechnology.medium.com/)
+- [OSC](https://blog.osaas.io)
+- [LinkedIn](https://www.linkedin.com/company/eyevinn/)
+
+Want to know more about Eyevinn, contact us at [info@eyevinn.se](mailto:info@eyevinn.se)!
+
