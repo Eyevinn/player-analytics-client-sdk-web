@@ -1,28 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Event filter</title>
-    <script type="module" src="demo.js"></script>
-  </head>
-
-  <body>
-    <div id="wrapper">
-      <video
-        controls
-      ></video>
-    </div>
-    <style>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eyevinn- Event filter</title>
+  <script type="module" src="demo.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
       #wrapper {
-        width: 100%;
-        max-width: 800px;
-        margin: 0 auto;
+          width: 100%;
+          max-width: 800px;
+          margin: 0 auto;
       }
 
       video {
-        max-width: 100%;
+          width: 100%;
+          height: 60vh;
+          object-fit: contain;
+          background-color: black;
       }
-    </style>
-  </body>
+
+      #controls {
+          display: flex;
+          margin: 1rem 0;
+      }
+
+      #videoUrlInput {
+          flex-grow: 1;
+          padding: 0.5rem;
+          border: 1px solid #ccc;
+          border-right: none;
+          border-radius: 4px 0 0 4px;
+          font-size: 1rem;
+      }
+
+      #loadButton, #previousButton {
+          padding: 0.5rem 1rem;
+          font-size: 1rem;
+          cursor: pointer;
+          border: none;
+      }
+
+      #previousButton {
+          background-color: #6b7280;
+          color: white;
+      }
+
+      #loadButton {
+          background-color: #2563eb;
+          color: white;
+          border-radius: 0 4px 4px 0;
+      }
+
+      #grafana-link {
+          display: inline-block;
+          margin-top: 1rem;
+          background-color: #2563eb;
+          color: white;
+          font-weight: 600;
+          padding: 0.5rem 1rem;
+          border-radius: 0.375rem;
+          text-decoration: none;
+          text-align: center;
+      }
+
+      #grafana-link:hover {
+          background-color: #1e40af;
+      }
+
+      #grafana-link:focus {
+          outline: 2px solid #93c5fd;
+          outline-offset: 2px;
+      }
+  </style>
+</head>
+
+<body>
+<div id="wrapper">
+  <div id="controls">
+    <input
+      id="videoUrlInput"
+      type="text"
+      placeholder="Paste video URL here..."
+    />
+    <button id="previousButton" title="Previous video">Previous</button>
+    <button id="loadButton" title="Load video">Load</button>
+  </div>
+
+  <video id="videoPlayer" controls></video>
+
+  <a
+    id="grafana-link"
+    href="https://eyevinnlab-grafana3.grafana-grafana.auto.prod.osaas.io/goto/HY7ckVbHg?orgId=1"
+    target="_blank"
+    rel="noopener noreferrer"
+    tabindex="0"
+    role="button"
+  >
+    Open Grafana Dashboard
+  </a>
+</div>
+
+<script type="module">
+  document.addEventListener("DOMContentLoaded", () => {
+    const videoElement = document.getElementById("videoPlayer");
+    const inputElement = document.getElementById("videoUrlInput");
+    const loadBtn = document.getElementById("loadButton");
+    const prevBtn = document.getElementById("previousButton");
+
+    const historyStack = [];
+
+    function cleanUrl(raw) {
+      let url = raw.trim().replace(/^"|"$/g, "");
+      if (url.includes(" ")) {
+        url = url.split(" ")[0];
+      }
+      return url;
+    }
+
+    function loadVideo(urlRaw, addToHistory = true) {
+      const url = cleanUrl(urlRaw);
+      if (!url) return;
+
+      if (addToHistory && videoElement.src) {
+        historyStack.push(videoElement.src);
+      }
+
+      if (Hls.isSupported() && url.endsWith(".m3u8")) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(videoElement);
+      } else {
+        videoElement.src = url;
+      }
+
+      videoElement.play();
+    }
+
+    loadBtn.addEventListener("click", () => {
+      const url = inputElement.value;
+      loadVideo(url);
+    });
+
+    inputElement.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        loadBtn.click();
+      }
+    });
+
+    prevBtn.addEventListener("click", () => {
+      const prevUrl = historyStack.pop();
+      if (prevUrl) {
+        loadVideo(prevUrl, false);
+      } else {
+        alert("No previous video in history.");
+      }
+    });
+
+    // Default video
+    loadVideo("https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4", false);
+
+    // Accessibility for Grafana
+    document.getElementById("grafana-link").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        window.open(this.href, "_blank", "noopener");
+      }
+    });
+  });
+</script>
+</body>
 </html>
