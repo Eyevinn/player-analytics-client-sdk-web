@@ -6,7 +6,7 @@ const HtmlInlineScriptPlugin = require('html-inline-script-webpack-plugin');
 module.exports = {
   mode: 'production',
   entry: {
-    main: ['./demo.js', './ui-controller.js'],
+    main: ['./demo.js'],
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
