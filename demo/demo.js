@@ -1,4 +1,4 @@
-import { PlayerAnalyticsConnector } from "../index.ts";
+import { PlayerAnalyticsConnector } from "@eyevinn/player-analytics-client-sdk-web";
 
 function getDeviceInfo() {
   const ua = navigator.userAgent || "";
