@@ -189,6 +189,7 @@ Run the demo page by `npm start`
 - A Github Action is triggered to do the releases towards the npmjs and github packages repositories.
 <br/>
 <br/>
+
 # About Eyevinn
 We are [Eyevinn Technology](https://www.eyevinntechnology.se/), and we help companies in the TV, media, and entertainment sectors optimize costs and boost profitability through enhanced media solutions. We are independent in a way that we are not commercially tied to any platform or technology vendor. As our way to innovate and push the industry forward, we develop proof-of-concepts and tools. We share things we have learn and code as open-source.
 
