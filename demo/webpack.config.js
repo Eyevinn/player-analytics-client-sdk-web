@@ -6,7 +6,7 @@ const HtmlInlineScriptPlugin = require('html-inline-script-webpack-plugin');
 module.exports = {
   mode: 'production',
   entry: {
-    main: ['./demo.js', './ui-controller.js'],
+    main: ['./demo.js'],
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -19,6 +19,7 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
+      title: 'Eyevinn Open Analytics',
       template: './index.html',
       inject: 'body',
       minify: {
@@ -47,6 +48,6 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['.js', '.json'],
+    extensions: ['.ts', '.js', '.json']
   }
 };
