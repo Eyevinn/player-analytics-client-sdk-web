@@ -33,9 +33,8 @@ function getDeviceInfo() {
 document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.querySelector("video");
   const inputElement = document.getElementById("videoUrlInput");
-
   const eventsinkUrl =
-    "https://eyevinnlab-epasdev.eyevinn-player-analytics-eventsink.auto.prod.osaas.io";
+    "https://eyevinn-epas1.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/";
   const debug = false;
 
   const analytics = new PlayerAnalyticsConnector(eventsinkUrl, debug);

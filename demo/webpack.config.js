@@ -19,6 +19,7 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
+      title: 'Eyevinn Open Analytics',
       template: './index.html',
       inject: 'body',
       minify: {
@@ -47,6 +48,6 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['.js', '.json'],
+    extensions: ['.ts', '.js', '.json']
   }
 };
