@@ -6,9 +6,17 @@
   "main": "dist/index.js",
   "module": "dist/module.js",
   "types": "dist/types.d.ts",
+  "targets": {
+    "demo": {
+      "distDir": "./site",
+      "source": "./demo/index.html",
+      "publicUrl": "/"
+    }
+  },
   "scripts": {
-    "start": "parcel --dist-dir=site --public-url=/epasdev demo/index.html",
+    "start": "parcel --dist-dir=site ./demo",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
+    "build:demo": "parcel build --target demo demo/index.html --dist-dir=site",
     "prepare": "npm run build",
     "prettier": "prettier --write './src/**/*.{ts,js,json,html}'",
     "postversion": "git push --no-verify && git push --tags --no-verify"

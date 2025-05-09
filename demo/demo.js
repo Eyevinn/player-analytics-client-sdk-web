@@ -1,4 +1,4 @@
-import { PlayerAnalyticsConnector } from "@eyevinn/player-analytics-client-sdk-web";
+import { PlayerAnalyticsConnector } from "../index.ts";
 
 function getDeviceInfo() {
   const ua = navigator.userAgent || "";
@@ -30,51 +30,69 @@ function getDeviceInfo() {
   return { deviceType, deviceModel };
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const videoElement = document.querySelector("video");
+document.addEventListener("DOMContentLoaded", () => {
+  const videoElement = document.getElementById("videoPlayer");
   const inputElement = document.getElementById("videoUrlInput");
+  const loadBtn = document.getElementById("loadButton");
+
   const eventsinkUrl =
     "https://eyevinn-epas1.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/";
-  const debug = false;
+  const analytics = new PlayerAnalyticsConnector(eventsinkUrl, false);
 
-  const analytics = new PlayerAnalyticsConnector(eventsinkUrl, debug);
+  function cleanUrl(raw) {
+    let url = raw.trim().replace(/^"|"$/g, "");
+    if (url.includes(" ")) {
+      url = url.split(" ")[0];
+    }
+    return url;
+  }
 
-  await analytics.init({
-    sessionId: `demo-page-${Date.now()}`,
-    heartbeatInterval: 10000,
+  async function loadVideo(urlRaw) {
+    const url = cleanUrl(urlRaw);
+    if (!url) return;
+
+    await analytics.init({
+      sessionId: `demo-page-${Date.now()}`,
+      heartbeatInterval: 10000,
+    });
+    analytics.load(videoElement);
+    if (Hls.isSupported() && url.endsWith(".m3u8")) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(videoElement);
+    } else {
+      videoElement.src = url;
+    }
+
+    const contentId = url.split("/").pop() || "";
+    const { deviceType, deviceModel } = getDeviceInfo();
+    analytics.reportMetadata({
+      live: false,
+      contentId: contentId,
+      contentUrl: videoElement.src,
+      deviceType: deviceType,
+      deviceModel: deviceModel,
+    });
+    videoElement.play();
+  }
+
+  loadBtn.addEventListener("click", () => {
+    const url = inputElement.value;
+    loadVideo(url);
   });
 
-  analytics.load(videoElement);
-
-  // Default video
-  let streamUrl =
-    "https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4";
-  const contentId = streamUrl.split("/").pop() || "";
-  const { deviceType, deviceModel } = getDeviceInfo();
-
-  videoElement.src = streamUrl;
-  analytics.reportMetadata({
-    live: false,
-    contentId: contentId,
-    contentUrl: streamUrl,
-    deviceType: deviceType,
-    deviceModel: deviceModel,
-  });
-
-  inputElement.addEventListener("change", () => {
-    const newUrl = inputElement.value.trim();
-    if (newUrl) {
-      videoElement.src = newUrl;
-      const contentId = streamUrl.split("/").pop() || "";
-
-      analytics.reportMetadata({
-        live: false,
-        contentId: contentId,
-        contentUrl: newUrl,
-        deviceType: deviceType,
-        deviceModel: deviceModel,
-      });
-      videoElement.play();
+  inputElement.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      loadBtn.click();
     }
   });
+
+  // Accessibility for Grafana
+  document
+    .getElementById("grafana-link")
+    .addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        window.open(this.href, "_blank", "noopener");
+      }
+    });
 });
