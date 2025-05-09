@@ -16,8 +16,7 @@ jobs:
       - name: install dependencies
         run: |
           npm install
-          npm run build
-        working-directory: ./demo
+          npm run build:demo
       - name: deploy to bucket
         uses: jakejarvis/s3-sync-action@v0.5.1
         with:
@@ -27,4 +26,4 @@ jobs:
           AWS_S3_BUCKET: 'www'
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID  }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SOURCE_DIR: 'demo/dist/'
+          SOURCE_DIR: 'site/'
