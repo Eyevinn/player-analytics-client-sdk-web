@@ -16,7 +16,7 @@
   "scripts": {
     "start": "parcel --target demo",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
-    "build:demo": "parcel build --target demo demo/index.html --dist-dir=site",
+    "build:demo": "NODE_OPTIONS='--no-experimental-fetch' parcel build --target demo",
     "prepare": "npm run build",
     "prettier": "prettier --write './src/**/*.{ts,js,json,html}'",
     "postversion": "git push --no-verify && git push --tags --no-verify"
