@@ -64,7 +64,28 @@ document.addEventListener("DOMContentLoaded", () => {
       videoElement.src = url;
     }
 
-    const contentId = url.split("/").pop() || "";
+    const parsedUrl = new URL(url);
+    let contentId;
+    if (
+      parsedUrl.pathname.endsWith(".m3u8") ||
+      parsedUrl.pathname.endsWith(".mpd")
+    ) {
+      // Extract path up to the last slash for manifest files
+      const lastSlashIndex = parsedUrl.pathname.lastIndexOf("/");
+      contentId =
+        lastSlashIndex > 0
+          ? parsedUrl.pathname.substring(0, lastSlashIndex)
+          : parsedUrl.pathname;
+    } else {
+      // Use filename for other files
+      const pathSegments = parsedUrl.pathname.split("/");
+      contentId = pathSegments[pathSegments.length - 1];
+      // Remove file extension from the contentId
+      const fileExtIndex = contentId.lastIndexOf(".");
+      if (fileExtIndex > 0) {
+        contentId = contentId.substring(0, fileExtIndex);
+      }
+    }
     const { deviceType, deviceModel } = getDeviceInfo();
     analytics.reportMetadata({
       live: false,
