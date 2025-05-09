@@ -10,8 +10,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: install dependencies
+        run: |
+          npm install
+          npm run build
+        working-directory: ./demo
       - name: deploy to bucket
         uses: jakejarvis/s3-sync-action@v0.5.1
+        working-directory: ./demo
         with:
           args: --follow-symlinks --delete
         env:
@@ -19,4 +28,4 @@ jobs:
           AWS_S3_BUCKET: 'www'
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID  }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SOURCE_DIR: 'demo/'
+          SOURCE_DIR: 'dist/'
