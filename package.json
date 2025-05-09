@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "start": "parcel --dist-dir=site ./demo",
+    "start": "parcel --target demo",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
     "build:demo": "parcel build --target demo demo/index.html --dist-dir=site",
     "prepare": "npm run build",
