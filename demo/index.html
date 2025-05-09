@@ -27,7 +27,6 @@
         value="https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4"
         placeholder="Paste video URL here..."
       />
-      <button id="previousButton" title="Previous video">Previous</button>
       <button id="loadButton" title="Load video">Load</button>
     </div>
 
@@ -66,73 +65,5 @@
       </picture>
     </a>
   </footer>
-
-  <script type="module">
-    document.addEventListener("DOMContentLoaded", () => {
-      const videoElement = document.getElementById("videoPlayer");
-      const inputElement = document.getElementById("videoUrlInput");
-      const loadBtn = document.getElementById("loadButton");
-      const prevBtn = document.getElementById("previousButton");
-
-      const historyStack = [];
-
-      function cleanUrl(raw) {
-        let url = raw.trim().replace(/^"|"$/g, "");
-        if (url.includes(" ")) {
-          url = url.split(" ")[0];
-        }
-        return url;
-      }
-
-      function loadVideo(urlRaw, addToHistory = true) {
-        const url = cleanUrl(urlRaw);
-        if (!url) return;
-
-        if (addToHistory && videoElement.src) {
-          historyStack.push(videoElement.src);
-        }
-
-        if (Hls.isSupported() && url.endsWith(".m3u8")) {
-          const hls = new Hls();
-          hls.loadSource(url);
-          hls.attachMedia(videoElement);
-        } else {
-          videoElement.src = url;
-        }
-
-        videoElement.play();
-      }
-
-      loadBtn.addEventListener("click", () => {
-        const url = inputElement.value;
-        loadVideo(url);
-      });
-
-      inputElement.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          loadBtn.click();
-        }
-      });
-
-      prevBtn.addEventListener("click", () => {
-        const prevUrl = historyStack.pop();
-        if (prevUrl) {
-          loadVideo(prevUrl, false);
-        } else {
-          alert("No previous video in history.");
-        }
-      });
-
-      // Default video
-      loadVideo("https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4", false);
-
-      // Accessibility for Grafana
-      document.getElementById("grafana-link").addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.key === " ") {
-          window.open(this.href, "_blank", "noopener");
-        }
-      });
-    });
-  </script>
 </body>
 </html>
