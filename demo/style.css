@@ -41,7 +41,7 @@ video {
 }
 
 @media (prefers-color-scheme: dark) {
-    #videoUrlInput {
+    .inputField {
         background-color: #333;
         color: white;
         border-color: #555;
