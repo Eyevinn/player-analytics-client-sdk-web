@@ -33,6 +33,7 @@ function getDeviceInfo() {
 document.addEventListener("DOMContentLoaded", () => {
   const videoElement = document.getElementById("videoPlayer");
   const inputElement = document.getElementById("videoUrlInput");
+  const contentIdInputField = document.getElementById("contentIdInputField");
   const loadBtn = document.getElementById("loadButton");
 
   const eventsinkUrl =
@@ -47,23 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return url;
   }
 
-  async function loadVideo(urlRaw) {
-    const url = cleanUrl(urlRaw);
-    if (!url) return;
-
-    await analytics.init({
-      sessionId: `demo-page-${Date.now()}`,
-      heartbeatInterval: 10000,
-    });
-    analytics.load(videoElement);
-    if (Hls.isSupported() && url.endsWith(".m3u8")) {
-      const hls = new Hls();
-      hls.loadSource(url);
-      hls.attachMedia(videoElement);
-    } else {
-      videoElement.src = url;
-    }
-
+  function generateContentId(url) {
     const parsedUrl = new URL(url);
     let contentId;
     if (
@@ -86,6 +71,30 @@ document.addEventListener("DOMContentLoaded", () => {
         contentId = contentId.substring(0, fileExtIndex);
       }
     }
+    return contentId;
+  }
+
+  async function loadVideo(urlRaw) {
+    const url = cleanUrl(urlRaw);
+    if (!url) return;
+
+    await analytics.init({
+      sessionId: `demo-page-${Date.now()}`,
+      heartbeatInterval: 10000,
+    });
+    analytics.load(videoElement);
+    if (Hls.isSupported() && url.endsWith(".m3u8")) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(videoElement);
+    } else {
+      videoElement.src = url;
+    }
+
+    // Use input field contentId if available, otherwise generate from URL
+    const userContentId = contentIdInputField.value.trim();
+    const contentId = userContentId || generateContentId(url);
+
     const { deviceType, deviceModel } = getDeviceInfo();
     analytics.reportMetadata({
       live: false,
