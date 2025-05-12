@@ -11,59 +11,68 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <header>
-    <picture>
-      <source srcset="./logo-darkmode.png" media="(prefers-color-scheme: dark)">
-      <img src="./logo-lightmode.png" />
-    </picture>
-    <h1>Open Analytics</h1>
-  </header>
+<header>
+  <picture>
+    <source srcset="./logo-darkmode.png" media="(prefers-color-scheme: dark)">
+    <img src="./logo-lightmode.png" />
+  </picture>
+  <h1>Open Analytics</h1>
+</header>
 
-  <div id="wrapper">
-    <div id="controls">
-      <input
-        id="videoUrlInput"
-        type="text"
-        value="https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4"
-        placeholder="Paste video URL here..."
-      />
-      <button id="loadButton" title="Load video">Load</button>
-    </div>
-
-    <video id="videoPlayer" controls></video>
-
-    <a
-      id="grafana-link"
-      href="https://eyevinn-openanalytics.grafana-grafana.auto.prod.osaas.io/d/aekgm1nvquozkd/counting-events?orgId=1&from=now-6h&to=now&timezone=browser"
-      target="_blank"
-      rel="noopener noreferrer"
-      tabindex="0"
-      role="button"
-    >
-      Open Grafana Dashboard
-    </a>
+<div id="wrapper">
+  <div id="controls">
+    <input
+      id="contentIdInputField"
+      class="inputField"
+      type="text"
+      style="width: 20px"
+      value=""
+      placeholder="Paste content name here .."
+    />
+    <input
+      id="videoUrlInput"
+      type="text"
+      class="inputField"
+      value="https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4"
+      placeholder="Paste video URL here..."
+    />
+    <button id="loadButton" title="Load video">Load</button>
   </div>
 
-  <footer>
-    <a
-      id="osc-link"
-      href="https://docs.osaas.io/osaas.wiki/Solution%3A-Eyevinn-Open-Analytics.html"
-      target="_blank"
-      rel="noopener noreferrer"
-      tabindex="2"
-    >Getting Started</a>
-    <a
-      id="osc-logo"
-      href="https://www.osaas.io/"
-      target="_blank"
-      rel="noopener noreferrer"
-      tabindex="1"
-    >
-      <picture>
-        <source srcset="./OSC-logo-darkmode.png" media="(prefers-color-scheme: dark)">
-        <img src="./OSC-logo-lightmode.png" />
-      </picture>
-    </a>
-  </footer>
+  <video id="videoPlayer" controls></video>
+
+  <a
+    id="grafana-link"
+    href="https://eyevinn-openanalytics.grafana-grafana.auto.prod.osaas.io/d/aekgm1nvquozkd/counting-events?orgId=1&from=now-6h&to=now&timezone=browser"
+    target="_blank"
+    rel="noopener noreferrer"
+    tabindex="0"
+    role="button"
+  >
+    Open Grafana Dashboard
+  </a>
+</div>
+
+<footer>
+  <a
+    id="osc-link"
+    href="https://docs.osaas.io/osaas.wiki/Solution%3A-Eyevinn-Open-Analytics.html"
+    target="_blank"
+    rel="noopener noreferrer"
+    tabindex="2"
+  >Getting Started</a>
+  <a
+    id="osc-logo"
+    href="https://www.osaas.io/"
+    target="_blank"
+    rel="noopener noreferrer"
+    tabindex="1"
+  >
+    <picture>
+      <source srcset="./OSC-logo-darkmode.png" media="(prefers-color-scheme: dark)">
+      <img src="./OSC-logo-lightmode.png" />
+    </picture>
+  </a>
+</footer>
 </body>
 </html>

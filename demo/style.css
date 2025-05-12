@@ -29,7 +29,7 @@ video {
     margin: 1rem 0;
 }
 
-#videoUrlInput {
+.inputField {
     flex-grow: 1;
     padding: 0.5rem;
     margin: 0 1rem 0 0;
