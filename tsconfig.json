@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "allowJs": true,
+    "allowJs": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "lib": ["es6", "dom", "es2017"],
@@ -10,5 +10,6 @@
     "emitDeclarationOnly": true,
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", "demo", "dist"]
+  "include": ["index.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "demo", "site", "dist", "**/*.test.ts"]
 }
