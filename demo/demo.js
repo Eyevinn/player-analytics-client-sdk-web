@@ -1,406 +1,272 @@
-import { PlayerAnalyticsConnector } from "../index.ts";
-import { SGAIAdTrackingUrlsExtractor } from "../index.ts";
-import { SGAIAdImpressionSender } from "../index.ts";
-import { normalizeEventName } from "../index.ts";
-import { SGAIEvent } from "../index.ts";
+import {
+  PlayerAnalyticsConnector,
+  SGAIAdTracker,
+  SGAIEvent,
+  UrlUtils,
+  DeviceUtils,
+  HlsUtils,
+  AdsUtils,
+} from "../index";
 
-function getDeviceInfo() {
-  const ua = navigator.userAgent || "";
-  let deviceType = "desktop";
-  let deviceModel = "unknown";
-  if (/mobile|android|iphone|ipod|windows phone/i.test(ua)) {
-    deviceType = /tablet|ipad/i.test(ua) ? "tablet" : "mobile";
-  }
-  if (/iPad/i.test(ua)) deviceModel = "iPad";
-  else if (/iPhone/i.test(ua)) deviceModel = "iPhone";
-  else if (/Android/i.test(ua)) {
-    const m = ua.match(/Android\s([0-9.]+)/i);
-    deviceModel = m ? "Android " + m[1] : "Android";
-  } else if (/Windows NT/i.test(ua)) deviceModel = "Windows";
-  else if (/Macintosh/i.test(ua)) deviceModel = "Mac";
-  else if (/Linux/i.test(ua)) deviceModel = "Linux";
-  return { deviceType, deviceModel };
-}
+// ---------------------- configurable UI constants ----------------------
+const PROGRESS_LINE_BOTTOM = 13;     // px (distance from timeline)
+const OVERLAY_BAND = 12;            // marker band height
+const DEFAULT_MARKERS_PER_POD = 1;  // number of dots per interstitial
 
-function cleanUrl(raw) {
-  let url = (raw || "").trim().replace(/^"|"$/g, "");
-  if (url.includes(" ")) url = url.split(" ")[0];
-  return url;
-}
-
+// ---------------------- demo-only helper ----------------------
 function generateContentId(url) {
-  const u = new URL(url);
-  if (u.pathname.endsWith(".m3u8") || u.pathname.endsWith(".mpd")) {
-    const i = u.pathname.lastIndexOf("/");
-    return i > 0 ? u.pathname.substring(0, i) : u.pathname;
+  try {
+    const u = new URL(url);
+    let id = (u.pathname || "").split("/").filter(Boolean).join("-");
+    if (!id) id = u.host || "content";
+    const dot = id.lastIndexOf(".");
+    if (dot > 0) id = id.substring(0, dot);
+    return id;
+  } catch {
+    const parts = String(url || "").split("/");
+    let id = parts.filter(Boolean).join("-");
+    const dot = id.lastIndexOf(".");
+    if (dot > 0) id = id.substring(0, dot);
+    return id || "content";
   }
-  const parts = u.pathname.split("/");
-  let id = parts[parts.length - 1];
-  const dot = id.lastIndexOf(".");
-  if (dot > 0) id = id.substring(0, dot);
-  return id;
 }
 
+// ---------------------- overlay helpers ----------------------
+function createOrGetOverlay(playerWrap) {
+  let overlay = document.getElementById("ad-markers-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ad-markers-overlay";
+    playerWrap.appendChild(overlay);
+  }
+  styleOverlay(overlay);
+  return overlay;
+}
+
+function styleOverlay(overlay) {
+  Object.assign(overlay.style, {
+    position: "absolute",
+    left: "0",
+    right: "0",
+    bottom: PROGRESS_LINE_BOTTOM + "px",
+    height: OVERLAY_BAND + "px",
+    pointerEvents: "none",
+    zIndex: "9999",
+  });
+}
+
+// ---------------------- dot management functions ----------------------
+function hideAllDots(overlay) {
+  const dots = overlay.querySelectorAll("div");
+  dots.forEach((dot) => {
+    dot.style.display = "none";
+  });
+}
+
+function showAllDots(overlay) {
+  const dots = overlay.querySelectorAll("div");
+  dots.forEach((dot) => {
+    dot.style.display = "block";
+  });
+}
+
+function removeDotNearCurrentTime(overlay, videoElement, toleranceSeconds = 15) {
+  const currentTime = videoElement.currentTime;
+  const duration = videoElement.duration;
+
+  if (!duration || !isFinite(duration) || !isFinite(currentTime)) return;
+
+  const currentPct = (currentTime / duration) * 100;
+  const tolerancePct = (toleranceSeconds / duration) * 100;
+
+  const dots = overlay.querySelectorAll("div");
+  dots.forEach((dot) => {
+    const dotLeft = parseFloat(dot.style.left);
+    if (Math.abs(dotLeft - currentPct) <= tolerancePct) {
+      dot.remove();
+    }
+  });
+}
+
+// --------------------------- main -----------------------------
 document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.getElementById("videoPlayer");
   const inputElement = document.getElementById("videoUrlInput");
   const contentIdInputField = document.getElementById("contentIdInputField");
   const loadBtn = document.getElementById("loadButton");
 
-
+  // ensure wrapper for overlay
   let playerWrap = document.getElementById("playerWrap");
   if (!playerWrap || !playerWrap.contains(videoElement)) {
     playerWrap = document.createElement("div");
     playerWrap.id = "playerWrap";
-    Object.assign(playerWrap.style, {
-      position: "relative",
-      display: "inline-block",
-      lineHeight: "0",
-      maxWidth: "100%",
-    });
-    const parent = videoElement.parentNode;
-    parent.insertBefore(playerWrap, videoElement);
+    playerWrap.style.position = "relative";
+    playerWrap.style.width = "100%";
+    playerWrap.style.maxWidth = "960px";
+    playerWrap.style.margin = "0 auto";
+    videoElement.parentNode?.insertBefore(playerWrap, videoElement);
     playerWrap.appendChild(videoElement);
   }
 
-  // Analytics
-  const eventsinkUrl = "https://eyevinn-epas1.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/";
+  // create overlay once and keep reusing it (no fullscreen handling)
+  const overlay = createOrGetOverlay(playerWrap);
+
+  const eventsinkUrl =
+    "https://eyevinn-epas1.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/";
   const analytics = new PlayerAnalyticsConnector(eventsinkUrl, false);
 
+  let cancelQuartiles = () => {};
+
   async function loadVideo(urlRaw) {
-    const url = cleanUrl(urlRaw);
+    const url = UrlUtils.cleanUrl(urlRaw || inputElement.value || "");
     if (!url) return;
 
-    await analytics.init({ sessionId: "demo-page-" + Date.now(), heartbeatInterval: 10000 });
-    analytics.load(videoElement);
+    const providedContentId = (contentIdInputField?.value || "").trim();
+    const contentId = providedContentId || generateContentId(url);
 
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const PROGRESS_LINE_BOTTOM = isMobile ? 16 : 20;
-    const OVERLAY_BAND = 8;
-
-    function ensureAdOverlay() {
-      let overlay = document.getElementById("ad-markers-overlay");
-      if (!overlay) {
-        overlay = document.createElement("div");
-        overlay.id = "ad-markers-overlay";
-        Object.assign(overlay.style, {
-          position: "absolute",
-          left: "0",
-          right: "0",
-          bottom: PROGRESS_LINE_BOTTOM + "px",
-          height: OVERLAY_BAND + "px",
-          pointerEvents: "none",
-          zIndex: "10",
-        });
-        playerWrap.appendChild(overlay);
-        const ro = new ResizeObserver(function () {
-          overlay.style.bottom = PROGRESS_LINE_BOTTOM + "px";
-          overlay.style.height = OVERLAY_BAND + "px";
-        });
-        ro.observe(videoElement);
-      } else {
-        overlay.style.bottom = PROGRESS_LINE_BOTTOM + "px";
-        overlay.style.height = OVERLAY_BAND + "px";
-        overlay.innerHTML = "";
-      }
-      return overlay;
+    // analytics init
+    try {
+      const { deviceType, deviceModel } = DeviceUtils.getDeviceInfo();
+      analytics.init({ contentId, deviceType, deviceModel });
+    } catch (e) {
+      console.warn("[demo] analytics.init failed (continuing):", e);
     }
 
-    // Initialize tracking components
-    const extractor = new SGAIAdTrackingUrlsExtractor();
-    const pixelSender = new SGAIAdImpressionSender();
-    const addedCueIds = new Set();
-
-
-    function assetListUrlFromInterstitial(interstitialData) {
-      return interstitialData && interstitialData.assetListUrl ||
-        interstitialData && interstitialData.uri ||
-        null;
+    // SGAI tracker (extractor + sender inside)
+    const SESSION_ID = "ad-session-1";
+    const adTracker = new SGAIAdTracker(SESSION_ID);
+    if (adTracker?.extractor?.setAdsSessionId) {
+      adTracker.extractor.setAdsSessionId(SESSION_ID);
     }
 
+    // state for interstitial flow
+    let currentAdKey = null;
+    let extractPromise = null; // await map population before firing events
+    let assetSeqInPod = 0; // index fallback counter
 
-    function sendAdEvent(adKey, eventType) {
-      console.log("[SGAI] === SEND HLS AD EVENT ===");
-      console.log("[SGAI] Ad Key:", adKey);
-      console.log("[SGAI] Event Type:", eventType);
-
-      const all = extractor.getAll();
-      console.log("[SGAI] All available tracking data keys:", Object.keys(all));
-
-
-      let trackingData = null;
-      let mappedKey = adKey;
-
-
-      if (all[adKey]) {
-        trackingData = all[adKey];
-      } else {
-
-        const availableKeys = Object.keys(all);
-        if (availableKeys.length > 0) {
-          mappedKey = availableKeys[0]; // Use the first available key
-          trackingData = all[mappedKey];
-          console.log("[SGAI] Using fallback key:", mappedKey);
-        }
-      }
-
-      console.log("[SGAI] Mapped key:", mappedKey);
-      console.log("[SGAI] Tracking data:", trackingData);
-
-      if (!trackingData) {
-        console.error("[SGAI] NO TRACKING DATA FOUND for HLS interstitial ad");
-        return;
-      }
-
-      const availableKeys = Object.keys(trackingData || {});
-      console.log("[SGAI] Available event keys:", availableKeys);
-
-
-      let eventToFind = eventType;
-      if (eventType === 'impression' && !availableKeys.some(k => k.toLowerCase().includes('impression'))) {
-        console.log("[SGAI] No impression URLs found, mapping to start event");
-        eventToFind = 'start';
-      }
-
-      const tries = [
-        String(eventToFind || ""),
-        normalizeEventName(eventToFind),
-        String(eventToFind || "").toLowerCase(),
-        normalizeEventName(eventToFind).toLowerCase()
-      ];
-
-      console.log("[SGAI] Trying event variations (in order):", tries);
-
-      let urls = [];
-      let foundEventType = null;
-
-      for (let i = 0; i < tries.length && urls.length === 0; i++) {
-        const tk = tries[i];
-        let matchKey = availableKeys.find(k => k.toLowerCase() === String(tk || "").toLowerCase());
-
-        if (!matchKey && tk) {
-          matchKey = availableKeys.find(k => k.toLowerCase().includes(String(tk).toLowerCase()));
-        }
-        if (matchKey) {
-          urls = trackingData[matchKey] || [];
-          foundEventType = matchKey;
-        }
-        console.log("[SGAI] Try", i + 1, "- try:", tk, "=> matchKey:", matchKey, "urlsFound:", urls.length);
-      }
-
-      if (urls.length) {
-        console.log("[SGAI] ✅ Sending tracking pixels for:", foundEventType);
-        console.log("[SGAI] ✅ URLs to fire:", urls);
-        pixelSender.sendMultiple(urls, eventType, mappedKey);
-      } else {
-        console.error("[SGAI] ❌ NO TRACKING URLS FOUND for event:", eventType);
-        console.log("[SGAI] Available events:", availableKeys);
-      }
-    }
-
-
-    function parseDateRangeLine(line) {
-      const obj = {};
-      const attrs = line.replace(/^#EXT-X-DATERANGE:/, "").split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-      for (let i = 0; i < attrs.length; i++) {
-        const kv = attrs[i].split("=");
-        const k = kv[0];
-        const vRaw = kv[1] ? kv[1].replace(/^"|"$/g, "") : "";
-        obj[k] = /^[0-9.]+$/.test(vRaw) ? Number(vRaw) : vRaw;
-      }
-      return obj;
-    }
-
-    function extractDateRangesFromText(text) {
-      const out = [];
-      const re = /#EXT-X-DATERANGE:[^\n]+/g;
-      let m;
-      while ((m = re.exec(text))) out.push(parseDateRangeLine(m[0]));
-      return out;
-    }
-
+    const isHls =
+      /\.m3u8($|\?)/i.test(url) && window.Hls && window.Hls.isSupported();
     let hls = null;
-    if (window.Hls && window.Hls.isSupported() && /\.m3u8($|\?)/i.test(url)) {
-      console.log("[SGAI] Setting up HLS for URL:", url);
+
+    async function sendAdEventSafe(adKey, eventType) {
+      try {
+        await adTracker.sendAdEvent(adKey, eventType);
+      } catch (e) {
+        console.error("[SGAI] sendAdEvent error:", e);
+      }
+    }
+
+    if (isHls) {
       hls = new window.Hls({ enableWorker: false, debug: true });
       hls.loadSource(url);
       hls.attachMedia(videoElement);
 
-
-      let currentInterstitialId = null;
-      let currentAssetId = null;
-      let currentAdKey = null;
-      let adStartTime = null;
-      let adQuartileTimer = null;
-
-
-      function clearAdQuartileTimer() {
-        if (adQuartileTimer) {
-          clearInterval(adQuartileTimer);
-          adQuartileTimer = null;
-          console.log("[SGAI] 🧹 Cleared quartile timer");
-        }
-      }
-
-
-      function trackHLSAdQuartiles(duration) {
-        clearAdQuartileTimer();
-        let lastQ = 0;
-        let adStartedAt = Date.now();
-
-        console.log("[SGAI] 🎯 Starting quartile tracking - duration:", duration, "currentAdKey:", currentAdKey);
-
-        adQuartileTimer = setInterval(() => {
-          if (!currentAssetId || !duration || !isFinite(duration) || !currentAdKey) {
-            return;
-          }
-
-          const elapsedMs = Date.now() - adStartedAt;
-          const elapsedSeconds = elapsedMs / 1000;
-          const progress = Math.min(elapsedSeconds / duration, 1.0);
-
-          let q = 0;
-          if (progress >= 0.75) q = 3;
-          else if (progress >= 0.5) q = 2;
-          else if (progress >= 0.25) q = 1;
-
-          if (q > lastQ && currentAdKey) {
-            if (q === 1) {
-              console.log("[SGAI] 📊 HLS Ad: First quartile reached (25%)");
-              sendAdEvent(currentAdKey, SGAIEvent.FIRST_QUARTILE);
-            }
-            if (q === 2) {
-              console.log("[SGAI] 📊 HLS Ad: Midpoint reached (50%)");
-              sendAdEvent(currentAdKey, SGAIEvent.MIDPOINT);
-            }
-            if (q === 3) {
-              console.log("[SGAI] 📊 HLS Ad: Third quartile reached (75%)");
-              sendAdEvent(currentAdKey, SGAIEvent.THIRD_QUARTILE);
-            }
-            lastQ = q;
-          }
-
-          if (elapsedSeconds >= duration + 1) {
-            console.log("[SGAI] 🏁 Quartile tracking complete - stopping timer");
-            clearAdQuartileTimer();
-          }
-        }, 200);
-      }
-
-
-      hls.on(window.Hls.Events.ERROR, function (_e, data) {
-        console.error("[SGAI] HLS Error:", data);
-      });
-
-      hls.on(window.Hls.Events.MANIFEST_LOADED, function (_e, data) {
-        console.log("[SGAI] HLS Manifest loaded:", data);
-      });
-
-
-      const interstitialEvents = [
-        'INTERSTITIAL_STARTED',
-        'INTERSTITIAL_ASSET_STARTED',
-        'INTERSTITIAL_ASSET_ENDED',
-        'INTERSTITIAL_ENDED'
+      // ---- SGAI interstitial lifecycle ----
+      const EVENTS = [
+        "INTERSTITIAL_STARTED",
+        "INTERSTITIAL_ASSET_STARTED",
+        "INTERSTITIAL_ASSET_ENDED",
+        "INTERSTITIAL_ENDED",
       ];
 
-      interstitialEvents.forEach(eventName => {
-        if (window.Hls.Events[eventName]) {
-          hls.on(window.Hls.Events[eventName], async function(event, data) {
-            console.log(`[SGAI] HLS Event ${eventName}:`, data);
+      EVENTS.forEach((name) => {
+        if (!window.Hls.Events[name]) return;
+        hls.on(window.Hls.Events[name], async (_evt, data) => {
+          try {
+            switch (name) {
+              case "INTERSTITIAL_STARTED": {
+                assetSeqInPod = 0;
 
-            switch(eventName) {
-              case 'INTERSTITIAL_STARTED':
-                console.log("[SGAI] === INTERSTITIAL POD STARTED ===");
-                currentInterstitialId = data && (data.identifier || data.id);
+                // Hide all dots when ad starts
+                hideAllDots(overlay);
+                console.log("[Ad Markers] Hiding dots - ad started");
 
-                if (currentInterstitialId) {
-                  const assetListUrl = assetListUrlFromInterstitial(data);
-                  if (assetListUrl) {
-                    const res = await extractor.extract(assetListUrl, currentInterstitialId);
-                    console.log("[SGAI] Extracted tracking for interstitial:", res);
-                  }
-                }
-                break;
-
-              case 'INTERSTITIAL_ASSET_STARTED':
-                console.log("[SGAI] === INTERSTITIAL ASSET STARTED ===");
-                currentAssetId = data && (data.assetId || data.id || '0');
-                adStartTime = videoElement.currentTime;
-
-                currentAdKey = currentInterstitialId ?
-                  `${currentInterstitialId}_asset_${currentAssetId}` :
-                  `ad-session-1_0_${currentAssetId}`;
-
-                console.log("[SGAI] Sending impression event...");
-                sendAdEvent(currentAdKey, SGAIEvent.IMPRESSION);
-
-                console.log("[SGAI] Sending start event...");
-                sendAdEvent(currentAdKey, SGAIEvent.START);
-
-                // Get duration and start quartile tracking
-                let assetDuration = null;
-                if (data && data.duration && data.duration > 0) {
-                  assetDuration = data.duration;
-                } else if (data && data.asset && data.asset.duration) {
-                  assetDuration = data.asset.duration;
+                const rid = data?.identifier || data?.id || null;
+                const assetListUrl = data?.assetListUrl || data?.uri || null;
+                if (rid && assetListUrl) {
+                  // populate extractor map (pod + per-asset URLs)
+                  extractPromise = adTracker.extractor
+                    .extract(assetListUrl, rid)
+                    .catch((e) =>
+                      console.warn("[SGAI] extractor.extract failed:", e)
+                    );
                 } else {
-                  assetDuration = 10; // Default fallback
-                }
-
-                if (assetDuration && assetDuration > 0) {
-                  trackHLSAdQuartiles(assetDuration);
+                  extractPromise = null;
                 }
                 break;
+              }
 
-              case 'INTERSTITIAL_ASSET_ENDED':
-                console.log("[SGAI] === INTERSTITIAL ASSET ENDED ===");
+              case "INTERSTITIAL_ASSET_STARTED": {
+                // robust zero-based index (handles numbers and "0")
+                const idx = AdsUtils.resolveAssetIndex(
+                  data,
+                  () => assetSeqInPod++
+                );
+                currentAdKey = AdsUtils.buildAdKey(SESSION_ID, idx);
+
+                if (extractPromise) {
+                  try {
+                    await extractPromise; // ensure map is ready
+                  } catch {}
+                }
+
+                await sendAdEventSafe(currentAdKey, SGAIEvent.IMPRESSION);
+                await sendAdEventSafe(currentAdKey, SGAIEvent.START);
+
+                let assetDuration = 0;
+                if (data?.duration > 0) assetDuration = data.duration;
+                else if (data?.asset?.duration > 0)
+                  assetDuration = data.asset.duration;
+
+                // schedule quartiles with a cancellable handle
+                cancelQuartiles();
+                cancelQuartiles = AdsUtils.scheduleQuartiles(
+                  assetDuration,
+                  (ev) => sendAdEventSafe(currentAdKey, ev)
+                );
+                break;
+              }
+
+              case "INTERSTITIAL_ASSET_ENDED": {
                 if (currentAdKey) {
-                  sendAdEvent(currentAdKey, SGAIEvent.COMPLETE);
+                  cancelQuartiles();
+                  cancelQuartiles = () => {};
+                  await sendAdEventSafe(currentAdKey, SGAIEvent.COMPLETE);
                 }
-                clearAdQuartileTimer();
-                currentAssetId = null;
                 currentAdKey = null;
-                adStartTime = null;
                 break;
+              }
 
-              case 'INTERSTITIAL_ENDED':
-                console.log("[SGAI] === INTERSTITIAL POD ENDED ===");
-                clearAdQuartileTimer();
-                currentInterstitialId = null;
-                currentAssetId = null;
+              case "INTERSTITIAL_ENDED": {
+                cancelQuartiles();
+                cancelQuartiles = () => {};
                 currentAdKey = null;
-                adStartTime = null;
+                extractPromise = null;
+
+                // Remove the dot that just played and show remaining dots
+                removeDotNearCurrentTime(overlay, videoElement, 15);
+                showAllDots(overlay);
+                console.log("[Ad Markers] Showing remaining dots - content resumed");
                 break;
+              }
             }
-          });
-        }
+          } catch (e) {
+            console.error(`[SGAI] Error handling ${name}:`, e);
+          }
+        });
       });
 
-
+      // ---- draw visual ad markers on LEVEL_LOADED ----
       hls.on(window.Hls.Events.LEVEL_LOADED, async function (_e, data) {
-        console.log("[SGAI] === HLS LEVEL LOADED ===");
-        const details = data.details;
-        if (!details) {
-          console.log("[SGAI] No details in level loaded event");
-          return;
-        }
+        const details = data?.details;
+        if (!details) return;
 
-        console.log("[SGAI] Level details:", details);
-
-
-        let anchorDate = details.programDateTime ? new Date(details.programDateTime) : null;
+        const anchorDate = HlsUtils.deriveAnchorDate(details);
         const frags = details.fragments || [];
+        const levelStart =
+          frags.length && isFinite(frags[0].start) ? frags[0].start : 0;
 
-        const firstFragWithPDT = frags.find(function (f) {
-          return f && (f.programDateTime || f.pdt);
-        });
-        if (!anchorDate && firstFragWithPDT) {
-          anchorDate = new Date(firstFragWithPDT.programDateTime || firstFragWithPDT.pdt);
-        }
-        const levelStart = frags.length && isFinite(frags[0].start) ? frags[0].start : 0;
-
-
+        // collect dateranges
         let ranges = [];
         if (Array.isArray(details.dateRanges) || Array.isArray(details.dateranges)) {
           ranges = details.dateRanges || details.dateranges;
@@ -409,154 +275,120 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else if (details.dateranges && typeof details.dateranges === "object") {
           ranges = Object.values(details.dateranges);
         }
-
-
         if (!ranges.length) {
-          const raw = (data.networkDetails && (data.networkDetails.responseText ||
-            (data.networkDetails.response && data.networkDetails.response.text))) || "";
-          if (raw) {
-            ranges = extractDateRangesFromText(raw);
-          }
+          const raw = data?.networkDetails?.responseText || "";
+          if (raw) ranges = HlsUtils.extractDateRangesFromText(raw);
         }
+        if (!ranges.length) return;
 
-        if (!ranges.length) {
-          console.warn("[SGAI] ⚠️ NO DATE RANGES FOUND - No visual ad markers will be shown");
-          return;
-        }
+        // clear overlay (no fullscreen re-style)
+        overlay.innerHTML = "";
+        styleOverlay(overlay);
 
-        console.log("[SGAI] === PROCESSING", ranges.length, "DATE RANGES FOR VISUAL MARKERS ===");
+        const duration =
+          videoElement.duration && isFinite(videoElement.duration)
+            ? videoElement.duration
+            : null;
 
-        const overlay = ensureAdOverlay();
-        const duration = videoElement.duration && isFinite(videoElement.duration) ? videoElement.duration : null;
+        for (const range of ranges) {
+          const klass = range.CLASS || range.class;
+          const rid = range.ID || range.id;
+          if (klass !== "com.apple.hls.interstitial" || !rid) continue;
 
-        ranges.forEach(function (rawRange, index) {
-          const klass = rawRange.CLASS || rawRange.class;
-          const rid = rawRange.ID || rawRange.id;
+          const startDateStr =
+            range["START-DATE"] || range.startDate || range._startDate;
+          const dur = Number(range.DURATION || range.duration) || 0;
 
-          if (klass !== "com.apple.hls.interstitial" || !rid) {
-            console.log("[SGAI] Skipping non-interstitial range:", klass, rid);
-            return;
+          if (!startDateStr || dur <= 0 || !anchorDate) continue;
+
+          // (Optional) discover X-ASSET-LIST and pre-prime tracking map
+          const assetList = HlsUtils.extractAssetListFromRange(
+            range,
+            data?.networkDetails?.responseText || ""
+          );
+          if (assetList) {
+            try {
+              await adTracker.extractor.extract(assetList, rid);
+            } catch {}
           }
 
-          const startDateStr = rawRange["START-DATE"] || rawRange.startDate || rawRange._startDate;
-          const dur = Number(rawRange.DURATION || rawRange.duration) || 0;
-
-
-          let assetList = rawRange["X-ASSET-LIST"] ||
-            rawRange["X-ASSETLIST"] ||
-            rawRange.assetList ||
-            rawRange["x-asset-list"] ||
-            rawRange.xAssetList;
-
-          if (!assetList && rawRange.attr && rawRange.attr.toString) {
-            const attrStr = rawRange.attr.toString();
-            const assetListMatch = attrStr.match(/X-ASSET-LIST=([^,]+)/i);
-            if (assetListMatch) {
-              assetList = assetListMatch[1].replace(/^"|"$/g, '');
-            }
-          }
-
-
-          if (!assetList) {
-            const rawManifest = data.networkDetails && (data.networkDetails.responseText ||
-              (data.networkDetails.response && data.networkDetails.response.text));
-
-            if (rawManifest && typeof rawManifest === 'string') {
-              const dateRangeRegex = new RegExp(`#EXT-X-DATERANGE:[^\\n]*ID="${rid}"[^\\n]*`, 'i');
-              const match = rawManifest.match(dateRangeRegex);
-
-              if (match) {
-                const dateRangeLine = match[0];
-                const assetListMatch = dateRangeLine.match(/X-ASSET-LIST="([^"]+)"/i);
-                if (assetListMatch) {
-                  assetList = assetListMatch[1];
-                }
-              }
-            }
-          }
-
-          if (!startDateStr || dur <= 0 || !anchorDate || !assetList) {
-            console.log("[SGAI] Missing required data for range:", {startDateStr, dur, anchorDate: !!anchorDate, assetList});
-            return;
-          }
-
+          const assetCount = DEFAULT_MARKERS_PER_POD;
           const startDate = new Date(startDateStr);
-          const startTime = levelStart + (startDate - anchorDate) / 1000;
-          const endTime = startTime + dur;
+          const deltaSec = (startDate.getTime() - anchorDate.getTime()) / 1000;
+          const startTime = levelStart + deltaSec;
 
-          console.log("[SGAI] ✅ VALID AD BREAK FOUND for visual marker!");
-          console.log("[SGAI] Start time:", startTime, "seconds");
-          console.log("[SGAI] End time:", endTime, "seconds");
+          for (let i = 0; i < assetCount; i++) {
+            // small +10s nudge to visually separate the dot from range start (keep/remove as you like)
+            const segStart = startTime + 8 + (dur / assetCount) * (i + 0.5);
+            if (!duration || !isFinite(duration) || !isFinite(segStart)) continue;
 
-          // Extract tracking data for ad break
-          if (!addedCueIds.has(rid)) {
-            extractor.extract(assetList, rid).then((res) => {
-              console.log("[SGAI] Extracted tracking data for", rid, ":", res);
-            }).catch((err) => {
-              console.error("[SGAI] Failed to extract tracking for", rid, ":", err);
-            });
-            addedCueIds.add(rid);
-          }
-
-
-          if (duration && startTime >= 0) {
+            const leftPct = (segStart / duration) * 100;
             const tick = document.createElement("div");
-            const leftPct = (startTime / duration) * 100;
-            const DOT_SIZE = 6;
+            tick.setAttribute("data-rid", rid);
+            tick.setAttribute("data-index", i);
             Object.assign(tick.style, {
               position: "absolute",
               left: Math.min(Math.max(leftPct, 0), 100) + "%",
               transform: "translateX(-50%)",
-              width: DOT_SIZE + "px",
-              height: DOT_SIZE + "px",
+              width: 3 + "px",
+              height: 3 + "px",
               borderRadius: "50%",
               background: "rgb(255, 215, 0)",
               border: "1px solid rgba(0, 0, 0, 0.5)",
-              boxShadow: "0 0 3px rgba(255, 215, 0, 0.8)",
+              boxShadow: "0 0 2px rgba(255, 215, 0, 0.8)",
             });
             overlay.appendChild(tick);
-            console.log("[SGAI] ✅ Added visual marker at", leftPct.toFixed(1), "%");
-          } else {
-            console.warn("[SGAI] Cannot add marker - duration:", duration, "startTime:", startTime);
           }
-        });
-      });
+        }
 
+        console.log("[Ad Markers] Created", overlay.children.length, "ad markers");
+      });
     } else {
-      console.log("[SGAI] Not an HLS stream or HLS not supported, using direct video source");
+      // non-HLS path
       videoElement.src = url;
     }
 
-    const userContentId = (contentIdInputField && contentIdInputField.value || "").trim();
-    const contentId = userContentId || generateContentId(url);
-    const dev = getDeviceInfo();
-    analytics.reportMetadata({
-      live: false,
-      contentId: contentId,
-      contentUrl: videoElement.src || url,
-      deviceType: dev.deviceType,
-      deviceModel: dev.deviceModel,
-    });
+    // analytics wiring
+    try {
+      analytics.setMediaElement(videoElement);
+    } catch (e) {
+      console.warn("[demo] analytics.setMediaElement failed:", e);
+    }
+    try {
+      analytics.videoLoaded({ contentId });
+      videoElement.addEventListener("play", () => analytics.videoPlaying({}));
+      videoElement.addEventListener("pause", () => analytics.videoPaused({}));
+      videoElement.addEventListener("seeking", () => analytics.videoSeeking({}));
+      videoElement.addEventListener("seeked", () => analytics.videoSeeked({}));
+      videoElement.addEventListener("ended", () => analytics.videoEnded({}));
+      videoElement.addEventListener("error", (e) => {
+        const err =
+          (videoElement.error && videoElement.error.message) || "unknown";
+        analytics.videoError({ message: String(err), data: { error: e } });
+      });
+    } catch (e) {
+      console.warn("[demo] analytics wiring failed (continuing):", e);
+    }
 
-
-    videoElement.play().catch(function () {
-      console.log("[SGAI] Auto-play prevented, waiting for user interaction");
-    });
+    // autoplay attempt
+    try {
+      await videoElement.play();
+    } catch (e) {
+      console.log("[demo] Autoplay blocked; waiting for user gesture.", e);
+    }
   }
 
-
-  loadBtn.addEventListener("click", function () {
-    loadVideo(inputElement.value);
-  });
-
-  inputElement.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") loadBtn.click();
+  // UI wiring
+  loadBtn?.addEventListener("click", () => loadVideo(inputElement.value));
+  inputElement?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") loadBtn?.click();
   });
 
   const graf = document.getElementById("grafana-link");
   if (graf) {
     graf.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") window.open(this.href, "_blank", "noopener");
+      if (e.key === "Enter" || e.key === " ")
+        window.open(this.href, "_blank", "noopener");
     });
   }
 });

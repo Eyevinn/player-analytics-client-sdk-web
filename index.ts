@@ -14,7 +14,6 @@ export {
   SGAIAdTracker,
   SGAIEvent,
   normalizeEventName,
-  mapEventName,
   type SGAIEventType,
   type TrackingEvent,
   type AssetListResponse,
@@ -22,9 +21,7 @@ export {
   type TrackingMap,
 } from "./src/SGAITracking";
 
-export {
-  // Re-export everything from tracking for easier imports
-  SGAIAdImpressionSender as AdImpressionSender,
-  SGAIAdTrackingUrlsExtractor as AdTrackingExtractor,
-  SGAIAdTracker as AdTracker,
-} from "./src/SGAITracking";
+export * as UrlUtils from "./src/utils/url";
+export * as DeviceUtils from "./src/utils/device";
+export * as HlsUtils from "./src/utils/hls";
+export * as AdsUtils from "./src/utils/ads";
