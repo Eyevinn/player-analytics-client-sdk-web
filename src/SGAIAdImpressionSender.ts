@@ -1,3 +1,5 @@
+import { isSameOrigin, safeDecode } from "./utils/url";
+
 export class SGAIAdImpressionSender {
   private sessionId: string;
 
@@ -44,14 +46,6 @@ export class SGAIAdImpressionSender {
   }
 
   getSessionId(): string { return this.sessionId; }
-}
-
-function isSameOrigin(u: string): boolean {
-  try { return new URL(u, location.href).origin === location.origin; } catch { return false; }
-}
-
-function safeDecode(u: string): string {
-  try { return decodeURIComponent(u); } catch { return u; }
 }
 
 function generateSessionId(): string {
