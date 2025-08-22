@@ -1,20 +1,63 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Eyevinn Open Analytics</title>
   <script type="module" src="demo.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@exampledev/new.css@1/new.min.css" />
-  <link rel="stylesheet" href="https://fonts.xz.style/serve/inter.css" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@exampledev/new.css@1/new.min.css">
+  <link rel="stylesheet" href="https://fonts.xz.style/serve/inter.css">
+  <link rel="stylesheet" href="./style.css">
+  <style>
+      #videoPlayer {
+          width: 100%;
+          max-width: 800px;
+          height: 450px;
+          background-color: #000;
+          display: block;
+          margin: 0 auto;
+      }
+
+      #wrapper {
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 20px;
+      }
+
+      #controls {
+          margin-bottom: 20px;
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+      }
+
+      #controls input {
+          flex: 1;
+          min-width: 200px;
+      }
+
+      #grafana-link {
+          display: inline-block;
+          margin-top: 20px;
+          padding: 10px 20px;
+          background-color: #007acc;
+          color: white;
+          text-decoration: none;
+          border-radius: 5px;
+          transition: background-color 0.3s;
+      }
+
+      #grafana-link:hover {
+          background-color: #005999;
+      }
+  </style>
 </head>
 <body>
 <header>
   <picture>
     <source srcset="./logo-darkmode.png" media="(prefers-color-scheme: dark)">
-    <img src="./logo-lightmode.png" />
+    <img src="./logo-lightmode.png">
   </picture>
   <h1>Open Analytics</h1>
 </header>
@@ -27,15 +70,13 @@
       type="text"
       style="width: 20px"
       value=""
-      placeholder="Paste content name here .."
-    />
+      placeholder="Paste content name here ..">
     <input
       id="videoUrlInput"
       type="text"
       class="inputField"
-      value="https://archive.org/serve/big-bunny-sample-video/SampleVideo.ia.mp4"
-      placeholder="Paste video URL here..."
-    />
+      value="http://localhost:3333/x36xhzz/x36xhzz.m3u8"
+      placeholder="Paste video URL here...">
     <button id="loadButton" title="Load video">Load</button>
   </div>
 
@@ -47,8 +88,7 @@
     target="_blank"
     rel="noopener noreferrer"
     tabindex="0"
-    role="button"
-  >
+    role="button">
     Open Grafana Dashboard
   </a>
 </div>
@@ -59,20 +99,53 @@
     href="https://docs.osaas.io/osaas.wiki/Solution%3A-Eyevinn-Open-Analytics.html"
     target="_blank"
     rel="noopener noreferrer"
-    tabindex="2"
-  >Getting Started</a>
+    tabindex="2">
+    Getting Started
+  </a>
   <a
     id="osc-logo"
     href="https://www.osaas.io/"
     target="_blank"
     rel="noopener noreferrer"
-    tabindex="1"
-  >
+    tabindex="1">
     <picture>
       <source srcset="./OSC-logo-darkmode.png" media="(prefers-color-scheme: dark)">
-      <img src="./OSC-logo-lightmode.png" />
+      <img src="./OSC-logo-lightmode.png">
     </picture>
   </a>
 </footer>
+
+<script>
+  (function() {
+    function c() {
+      var b = a.contentDocument || a.contentWindow.document;
+      if (b) {
+        var d = b.createElement('script');
+        d.innerHTML = "window.__CF$cv$params={r:'97109c35ff6882af',t:'MTc1NTUxMTcwOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
+        b.getElementsByTagName('head')[0].appendChild(d);
+      }
+    }
+    if (document.body) {
+      var a = document.createElement('iframe');
+      a.height = 1;
+      a.width = 1;
+      a.style.position = 'absolute';
+      a.style.top = 0;
+      a.style.left = 0;
+      a.style.border = 'none';
+      a.style.visibility = 'hidden';
+      document.body.appendChild(a);
+      if ('loading' !== document.readyState) c();
+      else if (window.addEventListener) document.addEventListener('DOMContentLoaded', c);
+      else {
+        var e = document.onreadystatechange || function() {};
+        document.onreadystatechange = function(b) {
+          e(b);
+          'loading' !== document.readyState && (document.onreadystatechange = e, c());
+        };
+      }
+    }
+  })();
+</script>
 </body>
 </html>

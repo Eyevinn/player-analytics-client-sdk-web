@@ -170,6 +170,89 @@ export interface IPlayerAnalyticsInitOptions {
 }
 ```
 
+### SGAI (Server-Guided Ad Insertion)
+The SDK provides built-in support for Server-Guided Ad Insertion tracking, automatically handling ad analytics for HLS 
+streams with interstitial advertisements.
+
+### Basic SGAI Setup
+
+```js
+
+ import {
+ SGAIAdTracker,
+ SGAIEvent
+} from "@eyevinn/player-analytics-client-sdk-web";
+
+ ```
+
+### Initialize analytics and SGAI tracker
+```js
+const adTracker = new SGAIAdTracker("ad-session-1");
+
+ try {
+ await playerAnalytics.init({
+ sessionId: "generated-unique-uuid-session-id",
+ });
+
+```
+
+ ```js 
+ const videoElement = document.querySelector("video");
+ playerAnalytics.load(videoElement);
+ } catch (err) {
+ console.error(err);
+ playerAnalytics.deinit();
+ }
+ 
+```
+### Automatic Ad Tracking with HLS
+
+ The SGAI tracker automatically integrates with HLS.js interstitial events:
+ const hls = new Hls();
+ hls.loadSource(manifestUrl);
+ hls.attachMedia(videoElement);
+
+### Automatic tracking setup
+
+```js 
+ hls.on(Hls.Events.INTERSTITIAL_STARTED, async (evt, data) => {
+ await adTracker.extractor.extract(data.assetListUrl, data.identifier);
+ });
+
+ hls.on(Hls.Events.INTERSTITIAL_ASSET_STARTED, async (evt, data) => {
+ const adKey = `ad-session-1_0_${data.index}`;
+ await adTracker.sendAdEvent(adKey, SGAIEvent.IMPRESSION);
+ await adTracker.sendAdEvent(adKey, SGAIEvent.START);
+ });
+
+ hls.on(Hls.Events.INTERSTITIAL_ASSET_ENDED, async (evt, data) => {
+ const adKey = `ad-session-1_0_${data.index}`;
+ await adTracker.sendAdEvent(adKey, SGAIEvent.COMPLETE);
+ });
+ 
+ ```
+
+### Manual Ad Event Tracking
+
+For custom implementations or non-HLS players:
+
+```js 
+const adTracker = new SGAIAdTracker("ad-session-1");
+const adKey = "ad-session-1_0_0"; // format: {sessionId}_{podIndex}_{assetIndex}
+
+// Track ad lifecycle manually
+await adTracker.sendAdEvent(adKey, SGAIEvent.IMPRESSION);
+await adTracker.sendAdEvent(adKey, SGAIEvent.START);
+await adTracker.sendAdEvent(adKey, SGAIEvent.FIRST_QUARTILE);
+await adTracker.sendAdEvent(adKey, SGAIEvent.MIDPOINT);
+await adTracker.sendAdEvent(adKey, SGAIEvent.THIRD_QUARTILE);
+await adTracker.sendAdEvent(adKey, SGAIEvent.COMPLETE);
+
+```
+
+The SGAI implementation handles cross-origin requests automatically and provides fallback mechanisms for reliable tracking pixel delivery.
+
+
 ## Development
 
 Run the demo page by `npm start`
