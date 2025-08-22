@@ -8,12 +8,11 @@ import {
   AdsUtils,
 } from "../index";
 
-// ---------------------- configurable UI constants ----------------------
-const PROGRESS_LINE_BOTTOM = 13;     // px (distance from timeline)
-const OVERLAY_BAND = 12;            // marker band height
-const DEFAULT_MARKERS_PER_POD = 1;  // number of dots per interstitial
+// --- UI constants ---
+const PROGRESS_LINE_BOTTOM = 13;
+const OVERLAY_BAND = 12;
+const DOT_SIZE = 3;
 
-// ---------------------- demo-only helper ----------------------
 function generateContentId(url) {
   try {
     const u = new URL(url);
@@ -30,8 +29,6 @@ function generateContentId(url) {
     return id || "content";
   }
 }
-
-// ---------------------- overlay helpers ----------------------
 function createOrGetOverlay(playerWrap) {
   let overlay = document.getElementById("ad-markers-overlay");
   if (!overlay) {
@@ -52,35 +49,28 @@ function styleOverlay(overlay) {
     height: OVERLAY_BAND + "px",
     pointerEvents: "none",
     zIndex: "9999",
+    display: "none", // start hidden so it doesn't float when timeline is hidden
   });
 }
 
-// ---------------------- dot management functions ----------------------
+// --- dot management functions ---
 function hideAllDots(overlay) {
-  const dots = overlay.querySelectorAll("div");
-  dots.forEach((dot) => {
-    dot.style.display = "none";
-  });
+  overlay.querySelectorAll("div[data-rid]").forEach((d) => (d.style.display = "none"));
 }
 
 function showAllDots(overlay) {
-  const dots = overlay.querySelectorAll("div");
-  dots.forEach((dot) => {
-    dot.style.display = "block";
-  });
+  overlay.querySelectorAll("div[data-rid]").forEach((d) => (d.style.display = "block"));
 }
 
-function removeDotNearCurrentTime(overlay, videoElement, toleranceSeconds = 15) {
+function removeDotNearCurrentTime(overlay, videoElement, toleranceSeconds = 8) {
   const currentTime = videoElement.currentTime;
   const duration = videoElement.duration;
-
   if (!duration || !isFinite(duration) || !isFinite(currentTime)) return;
 
   const currentPct = (currentTime / duration) * 100;
   const tolerancePct = (toleranceSeconds / duration) * 100;
 
-  const dots = overlay.querySelectorAll("div");
-  dots.forEach((dot) => {
+  overlay.querySelectorAll("div[data-rid]").forEach((dot) => {
     const dotLeft = parseFloat(dot.style.left);
     if (Math.abs(dotLeft - currentPct) <= tolerancePct) {
       dot.remove();
@@ -88,14 +78,82 @@ function removeDotNearCurrentTime(overlay, videoElement, toleranceSeconds = 15) 
   });
 }
 
-// --------------------------- main -----------------------------
+/**
+ * Accurate mapping from daterange START-DATE to timeline seconds:
+ * - Find the fragment whose PDT window contains the START-DATE.
+ * - Use that fragment's .start (timeline seconds) + delta(PDT).
+ * - If not inside any frag, use nearest frag with PDT (before/after).
+ * - Fall back to anchor method if no PDT on frags.
+ */
+function computeInterstitialStartSeconds(details, startDateStr) {
+  const frags = Array.isArray(details?.fragments) ? details.fragments : [];
+  if (!startDateStr || !frags.length) return null;
+
+  const startMs = new Date(startDateStr).getTime();
+  if (!isFinite(startMs)) return null;
+
+  // Collect fragments that have PDT and duration/start
+  const pdtFrags = frags
+    .map((f) => {
+      const pdtVal = f?.programDateTime ?? f?.pdt;
+      const dur = Number(f?.duration);
+      const start = Number(f?.start);
+      const pdtMs = pdtVal != null ? new Date(pdtVal).getTime() : NaN;
+      return (isFinite(pdtMs) && isFinite(dur) && isFinite(start))
+        ? { pdtMs, dur, start }
+        : null;
+    })
+    .filter(Boolean);
+
+  if (!pdtFrags.length) {
+    // fallback to anchor method used earlier
+    let anchor = details?.programDateTime ? new Date(details.programDateTime) : null;
+    if (!anchor) {
+      const firstWithPdt = frags.find((f) => f && (f.programDateTime || f.pdt));
+      if (firstWithPdt) anchor = new Date(firstWithPdt.programDateTime || firstWithPdt.pdt);
+    }
+    const levelStart = frags.length && isFinite(frags[0].start) ? frags[0].start : 0;
+    if (!anchor) return null;
+    return levelStart + (startMs - anchor.getTime()) / 1000;
+  }
+
+  for (const f of pdtFrags) {
+    const winStart = f.pdtMs;
+    const winEnd = f.pdtMs + f.dur * 1000 + 5; // tiny epsilon
+    if (startMs >= winStart && startMs <= winEnd) {
+      return f.start + (startMs - winStart) / 1000;
+    }
+  }
+  pdtFrags.sort((a, b) => a.pdtMs - b.pdtMs);
+  const first = pdtFrags[0];
+  const last = pdtFrags[pdtFrags.length - 1];
+
+  if (startMs < first.pdtMs) {
+    return first.start - (first.pdtMs - startMs) / 1000;
+  }
+  if (startMs > last.pdtMs + last.dur * 1000) {
+    return last.start + (startMs - (last.pdtMs + last.dur * 1000)) / 1000;
+  }
+  let nearest = first;
+  let best = Math.abs(startMs - first.pdtMs);
+  for (const f of pdtFrags) {
+    const d = Math.abs(startMs - f.pdtMs);
+    if (d < best) {
+      best = d;
+      nearest = f;
+    }
+  }
+  return nearest.start + (startMs - nearest.pdtMs) / 1000;
+}
+
+//      -- main --
 document.addEventListener("DOMContentLoaded", async () => {
   const videoElement = document.getElementById("videoPlayer");
   const inputElement = document.getElementById("videoUrlInput");
   const contentIdInputField = document.getElementById("contentIdInputField");
   const loadBtn = document.getElementById("loadButton");
 
-  // ensure wrapper for overlay
+  //wrapper for overlay
   let playerWrap = document.getElementById("playerWrap");
   if (!playerWrap || !playerWrap.contains(videoElement)) {
     playerWrap = document.createElement("div");
@@ -107,9 +165,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     videoElement.parentNode?.insertBefore(playerWrap, videoElement);
     playerWrap.appendChild(videoElement);
   }
-
-  // create overlay once and keep reusing it (no fullscreen handling)
   const overlay = createOrGetOverlay(playerWrap);
+
+  // Show overlay briefly on user interaction (like control bars do), then hide.
+  let overlayHideTimer = null;
+  const OVERLAY_SHOW_MS = 2400;
+
+  const showOverlayTemporarily = () => {
+    overlay.style.display = "block";
+    if (overlayHideTimer) clearTimeout(overlayHideTimer);
+    overlayHideTimer = setTimeout(() => {
+      overlay.style.display = "none";
+    }, OVERLAY_SHOW_MS);
+  };
+  ["mousemove", "mousedown", "mouseenter", "touchstart", "keydown", "focusin"].forEach((evt) => {
+    playerWrap.addEventListener(evt, showOverlayTemporarily, { passive: true });
+  });
+  playerWrap.addEventListener("mouseleave", () => {
+    overlay.style.display = "none";
+  });
 
   const eventsinkUrl =
     "https://eyevinn-epas1.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/";
@@ -161,7 +235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       hls.loadSource(url);
       hls.attachMedia(videoElement);
 
-      // ---- SGAI interstitial lifecycle ----
+      // SGAI interstitial lifecycle ----
       const EVENTS = [
         "INTERSTITIAL_STARTED",
         "INTERSTITIAL_ASSET_STARTED",
@@ -177,11 +251,19 @@ document.addEventListener("DOMContentLoaded", async () => {
               case "INTERSTITIAL_STARTED": {
                 assetSeqInPod = 0;
 
-                // Hide all dots when ad starts
+                // Re-align this pod's dot to the live playhead, then hide dots during the ad
+                const rid = data?.identifier || data?.id || null;
+                if (rid) {
+                  const dot = findDotByRid(overlay, rid);
+                  const dur = videoElement.duration;
+                  if (dot && dur && isFinite(dur)) {
+                    const pctNow = (videoElement.currentTime / dur) * 100;
+                    setDotPositionPercent(dot, pctNow);
+                  }
+                }
                 hideAllDots(overlay);
                 console.log("[Ad Markers] Hiding dots - ad started");
 
-                const rid = data?.identifier || data?.id || null;
                 const assetListUrl = data?.assetListUrl || data?.uri || null;
                 if (rid && assetListUrl) {
                   // populate extractor map (pod + per-asset URLs)
@@ -218,7 +300,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 else if (data?.asset?.duration > 0)
                   assetDuration = data.asset.duration;
 
-                // schedule quartiles with a cancellable handle
+                // schedule quartiles
                 cancelQuartiles();
                 cancelQuartiles = AdsUtils.scheduleQuartiles(
                   assetDuration,
@@ -242,11 +324,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 cancelQuartiles = () => {};
                 currentAdKey = null;
                 extractPromise = null;
-
-                // Remove the dot that just played and show remaining dots
-                removeDotNearCurrentTime(overlay, videoElement, 15);
+                removeDotNearCurrentTime(overlay, videoElement, 8);
                 showAllDots(overlay);
-                console.log("[Ad Markers] Showing remaining dots - content resumed");
+                console.log(
+                  "[Ad Markers] Showing remaining dots - content resumed"
+                );
                 break;
               }
             }
@@ -256,17 +338,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
       });
 
-      // ---- draw visual ad markers on LEVEL_LOADED ----
+      // draw visual ad markers
       hls.on(window.Hls.Events.LEVEL_LOADED, async function (_e, data) {
         const details = data?.details;
         if (!details) return;
+        overlay.innerHTML = "";
+        styleOverlay(overlay);
 
-        const anchorDate = HlsUtils.deriveAnchorDate(details);
-        const frags = details.fragments || [];
-        const levelStart =
-          frags.length && isFinite(frags[0].start) ? frags[0].start : 0;
-
-        // collect dateranges
+        const duration =
+          videoElement.duration && isFinite(videoElement.duration)
+            ? videoElement.duration
+            : null;
+        if (!duration) return; // wait until duration known
         let ranges = [];
         if (Array.isArray(details.dateRanges) || Array.isArray(details.dateranges)) {
           ranges = details.dateRanges || details.dateranges;
@@ -281,15 +364,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (!ranges.length) return;
 
-        // clear overlay (no fullscreen re-style)
-        overlay.innerHTML = "";
-        styleOverlay(overlay);
-
-        const duration =
-          videoElement.duration && isFinite(videoElement.duration)
-            ? videoElement.duration
-            : null;
-
         for (const range of ranges) {
           const klass = range.CLASS || range.class;
           const rid = range.ID || range.id;
@@ -297,9 +371,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
           const startDateStr =
             range["START-DATE"] || range.startDate || range._startDate;
-          const dur = Number(range.DURATION || range.duration) || 0;
-
-          if (!startDateStr || dur <= 0 || !anchorDate) continue;
+          const durAttr = Number(range.DURATION || range.duration) || 0;
+          if (!startDateStr || durAttr <= 0) continue;
 
           // (Optional) discover X-ASSET-LIST and pre-prime tracking map
           const assetList = HlsUtils.extractAssetListFromRange(
@@ -311,44 +384,34 @@ document.addEventListener("DOMContentLoaded", async () => {
               await adTracker.extractor.extract(assetList, rid);
             } catch {}
           }
+          const startSec = computeInterstitialStartSeconds(details, startDateStr);
+          if (!isFinite(startSec)) continue;
 
-          const assetCount = DEFAULT_MARKERS_PER_POD;
-          const startDate = new Date(startDateStr);
-          const deltaSec = (startDate.getTime() - anchorDate.getTime()) / 1000;
-          const startTime = levelStart + deltaSec;
-
-          for (let i = 0; i < assetCount; i++) {
-            // small +10s nudge to visually separate the dot from range start (keep/remove as you like)
-            const segStart = startTime + 8 + (dur / assetCount) * (i + 0.5);
-            if (!duration || !isFinite(duration) || !isFinite(segStart)) continue;
-
-            const leftPct = (segStart / duration) * 100;
-            const tick = document.createElement("div");
-            tick.setAttribute("data-rid", rid);
-            tick.setAttribute("data-index", i);
-            Object.assign(tick.style, {
-              position: "absolute",
-              left: Math.min(Math.max(leftPct, 0), 100) + "%",
-              transform: "translateX(-50%)",
-              width: 3 + "px",
-              height: 3 + "px",
-              borderRadius: "50%",
-              background: "rgb(255, 215, 0)",
-              border: "1px solid rgba(0, 0, 0, 0.5)",
-              boxShadow: "0 0 2px rgba(255, 215, 0, 0.8)",
-            });
-            overlay.appendChild(tick);
-          }
+          // dot at exact start (predictive)
+          const leftPct = (startSec / duration) * 100;
+          const tick = document.createElement("div");
+          tick.setAttribute("data-rid", rid);
+          tick.setAttribute("data-index", "0");
+          Object.assign(tick.style, {
+            position: "absolute",
+            left: Math.min(Math.max(leftPct, 0), 100) + "%",
+            transform: "translateX(-50%)",
+            width: DOT_SIZE + "px",
+            height: DOT_SIZE + "px",
+            borderRadius: "50%",
+            background: "rgb(255, 215, 0)",
+            border: "1px solid rgba(0, 0, 0, 0.5)",
+            boxShadow: "0 0 2px rgba(255, 215, 0, 0.8)",
+          });
+          overlay.appendChild(tick);
         }
-
         console.log("[Ad Markers] Created", overlay.children.length, "ad markers");
       });
     } else {
-      // non-HLS path
       videoElement.src = url;
     }
 
-    // analytics wiring
+    // analytics
     try {
       analytics.setMediaElement(videoElement);
     } catch (e) {
@@ -369,8 +432,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (e) {
       console.warn("[demo] analytics wiring failed (continuing):", e);
     }
-
-    // autoplay attempt
     try {
       await videoElement.play();
     } catch (e) {
@@ -378,7 +439,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // UI wiring
+  // UI
   loadBtn?.addEventListener("click", () => loadVideo(inputElement.value));
   inputElement?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") loadBtn?.click();
