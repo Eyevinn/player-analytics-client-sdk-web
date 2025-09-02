@@ -16,6 +16,7 @@ import {
 export interface IPlayerAnalyticsConnectorInitOptions {
   sessionId?: string;
   heartbeatInterval?: number;
+  shardId?: string;
 }
 
 export class PlayerAnalyticsConnector {
@@ -42,6 +43,7 @@ export class PlayerAnalyticsConnector {
     const { heartbeatInterval, isInitiated } =
       await this.playerAnalytics.initiateAnalyticsReporter({
         sessionId: this.sessionId,
+        shardId: options.shardId,
         ...options,
       });
 

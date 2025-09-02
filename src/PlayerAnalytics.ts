@@ -21,6 +21,7 @@ import { Reporter } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
   sessionId?: string;
+  shardId?: string;
   heartbeatInterval?: number;
 }
 
@@ -35,6 +36,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
 
   public async initiateAnalyticsReporter({
     sessionId,
+    shardId,
     heartbeatInterval = HEARTBEAT_INTERVAL,
   }: IPlayerAnalyticsInitOptions) {
     this.analyticsReporter = new Reporter({
@@ -42,6 +44,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
       eventsinkUrl: this.eventsinkUrl,
       debug: this.debug,
       heartbeatInterval,
+      shardId,
     });
 
     const { sessionId: generatedSessionId, isInitiated } =

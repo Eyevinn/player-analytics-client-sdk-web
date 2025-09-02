@@ -8,6 +8,7 @@ export interface IReporterOptions {
   eventsinkUrl: string;
   heartbeatInterval?: number;
   sessionId?: string;
+  shardId?: string;
   debug?: boolean;
 }
 
@@ -22,11 +23,13 @@ export class Reporter {
   private debug: boolean;
   private eventsinkUrl: string;
   private sessionId?: string;
+  private shardId?: string;
   private heartbeatInterval?: number;
   private isInitiated = false;
 
   constructor(options: IReporterOptions) {
     this.debug = options.debug;
+    this.shardId = options.shardId;
     this.eventsinkUrl = options.eventsinkUrl;
     this.sessionId = options.sessionId;
     this.heartbeatInterval = options.heartbeatInterval || HEARTBEAT_INTERVAL;
@@ -41,6 +44,7 @@ export class Reporter {
     const data: TInitEvent = {
       event: "init",
       sessionId: this.sessionId,
+      shardId: this.shardId,
       timestamp: Date.now(),
       playhead: -1,
       duration: -1,
@@ -95,6 +99,7 @@ export class Reporter {
       );
     const payload = {
       sessionId: this.sessionId,
+      shardId: this.shardId,
       ...data,
     };
     if (this.debug) {
