@@ -21,7 +21,7 @@ import { Reporter } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
   sessionId?: string;
-  shardId: string;
+  shardId?: string;
   heartbeatInterval?: number;
 }
 

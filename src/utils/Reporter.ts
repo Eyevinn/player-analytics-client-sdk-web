@@ -8,7 +8,7 @@ export interface IReporterOptions {
   eventsinkUrl: string;
   heartbeatInterval?: number;
   sessionId?: string;
-  shardId: string;
+  shardId?: string;
   debug?: boolean;
 }
 
@@ -23,7 +23,7 @@ export class Reporter {
   private debug: boolean;
   private eventsinkUrl: string;
   private sessionId?: string;
-  private shardId: string;
+  private shardId?: string;
   private heartbeatInterval?: number;
   private isInitiated = false;
 

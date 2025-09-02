@@ -43,7 +43,7 @@ export class PlayerAnalyticsConnector {
     const { heartbeatInterval, isInitiated } =
       await this.playerAnalytics.initiateAnalyticsReporter({
         sessionId: this.sessionId,
-        shardId: options.shardId || "default",
+        shardId: options.shardId,
         ...options,
       });
 
