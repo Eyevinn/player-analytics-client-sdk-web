@@ -17,7 +17,6 @@
     "start": "parcel --target demo",
     "build": "rm -rf ./dist && parcel build index.ts && tsc",
     "build:demo": "NODE_OPTIONS='--no-experimental-fetch' parcel build --target demo",
-    "prepare": "npm run build",
     "prettier": "prettier --write './src/**/*.{ts,js,json,html}'",
     "postversion": "git push --no-verify && git push --tags --no-verify"
   },
@@ -47,6 +46,6 @@
   },
   "dependencies": {
     "@eyevinn/media-event-filter": "^3.4.1",
-    "@eyevinn/player-analytics-specification": "0.3.1"
+    "@eyevinn/player-analytics-specification": "0.5.0"
   }
 }
