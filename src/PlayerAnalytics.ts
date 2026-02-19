@@ -30,7 +30,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   private eventsinkUrl: string;
   private analyticsReporter: Reporter;
   constructor(eventsinkUrl: string, debug?: boolean) {
-    this.debug = debug;
+    this.debug = debug ?? false;
     this.eventsinkUrl = eventsinkUrl;
   }
 
@@ -53,63 +53,86 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
     return { sessionId: generatedSessionId, heartbeatInterval, isInitiated };
   }
 
+  private ensureReporter(): boolean {
+    if (!this.analyticsReporter) {
+      console.warn('[PlayerAnalytics] Not initialized. Call initiateAnalyticsReporter() first.');
+      return false;
+    }
+    return true;
+  }
+
   public init(data: TInitEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public metadata(data: TMetadataEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public heartbeat(data: THeartbeatEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public loading(data: TLoadingEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public loaded(data: TLoadedEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public playing(data: TPlayingEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public pause(data: TPausedEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public buffering(data: TBufferingEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public buffered(data: TBufferedEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public seeking(data: TSeekingEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public seeked(data: TSeekedEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public bitrateChanged(data: TBitrateChangedEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public error(data: TErrorEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public warning(data: TWarningEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
   public stopped(data: TStoppedEvent): void {
+    if (!this.ensureReporter()) return;
     this.analyticsReporter.send(data);
   }
 
