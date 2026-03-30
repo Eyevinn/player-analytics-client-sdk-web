@@ -10,6 +10,7 @@ import {
   TErrorEventPayload,
   TEventType,
   TMetadataEventPayload,
+  TWarningEventPayload,
   UUID,
 } from "@eyevinn/player-analytics-specification";
 
@@ -187,7 +188,7 @@ export class PlayerAnalyticsConnector {
     });
   }
 
-  public reportWarning(payload: TErrorEventPayload) {
+  public reportWarning(payload: TWarningEventPayload) {
     if (!this.analyticsInitiated) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
