@@ -371,6 +371,23 @@ describe("PlayerAnalyticsConnector", () => {
       expect(body.event).toBe("warning");
       expect(body.payload.category).toBe("player");
     });
+
+    it("should send warning event with all TWarningEventPayload fields", () => {
+      connector.reportWarning({
+        category: "decoder",
+        code: "CODEC_FALLBACK",
+        message: "Fell back to software decoding",
+        data: { codec: "hevc", fallback: "avc1" },
+      });
+
+      expect(mockFetch).toHaveBeenCalled();
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.event).toBe("warning");
+      expect(body.payload.category).toBe("decoder");
+      expect(body.payload.code).toBe("CODEC_FALLBACK");
+      expect(body.payload.message).toBe("Fell back to software decoding");
+      expect(body.payload.data).toEqual({ codec: "hevc", fallback: "avc1" });
+    });
   });
 
   describe("deinit()", () => {
