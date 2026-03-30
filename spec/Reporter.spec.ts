@@ -238,7 +238,7 @@ describe("Reporter", () => {
       expect(console.log).toHaveBeenCalled();
     });
 
-    it("should catch and handle fetch failure gracefully", async () => {
+    it("should warn on network failure in non-debug mode", async () => {
       const options: IReporterOptions = {
         eventsinkUrl: "https://example.com/analytics",
         sessionId: "test-session-id",
@@ -266,8 +266,44 @@ describe("Reporter", () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Should not throw unhandled rejection
       expect(mockFetch).toHaveBeenCalled();
+      expect(console.warn).toHaveBeenCalledWith(
+        "[AnalyticsReporter] Send failed:", "Network failure"
+      );
+    });
+
+    it("should warn on HTTP error response (e.g. 404)", async () => {
+      const options: IReporterOptions = {
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+        debug: true,
+      };
+      const reporter = new Reporter(options);
+      await reporter.init();
+
+      (reporter as any).debug = false;
+      mockFetch.calls.reset();
+      mockFetch.and.returnValue(Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+      }));
+
+      spyOn(console, "warn");
+
+      reporter.send({
+        event: "heartbeat",
+        sessionId: "test-session-id",
+        timestamp: 1234567890,
+        playhead: 30,
+        duration: 120,
+      } as TPlayerAnalyticsEvent);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(console.warn).toHaveBeenCalledWith(
+        "[AnalyticsReporter] Send failed: 404 Not Found"
+      );
     });
 
     it("should warn and not send when not initiated", async () => {
