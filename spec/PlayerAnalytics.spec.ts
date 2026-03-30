@@ -157,7 +157,8 @@ describe("PlayerAnalytics", () => {
       expect(mockFetch).toHaveBeenCalled();
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body.event).toBe("playing");
-      expect(body.sessionId).toBe("test-session");
+      // Reporter uses its authoritative sessionId (from server init response)
+      expect(body.sessionId).toBe("test-session-id");
     });
 
     it("should call reporter.send with correct data for pause()", () => {

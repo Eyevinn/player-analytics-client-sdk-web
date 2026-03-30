@@ -4,6 +4,7 @@ import {
   TMediaEventFilter,
 } from "@eyevinn/media-event-filter";
 import { PlayerAnalytics } from "./PlayerAnalytics";
+import { TOnSendError } from "./utils/Reporter";
 import {
   TBaseEvent,
   TBitrateChangedEventPayload,
@@ -27,28 +28,44 @@ export class PlayerAnalyticsConnector {
 
   private playerAnalytics: PlayerAnalytics;
   private analyticsInitiated = false;
+  private initCalled = false;
 
   private videoEventFilter: TMediaEventFilter;
   private videoEventListener: any;
 
   private heartbeatInterval: number;
   private heartbeatIntervalTimer: ReturnType<typeof setInterval>;
+  private pendingHeartbeatStart = false;
 
-  constructor(eventsinkUrl: string, debug?: boolean) {
+  constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.eventsinkUrl = eventsinkUrl;
-    this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug);
+    this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug, onError);
   }
 
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {
     this.sessionId = options.sessionId;
-    const { heartbeatInterval, isInitiated } =
-      await this.playerAnalytics.initiateAnalyticsReporter({
-        ...options,
-        sessionId: this.sessionId,
-      });
+    this.initCalled = true;
 
-    this.analyticsInitiated = isInitiated;
-    this.heartbeatInterval = heartbeatInterval;
+    const initPromise = this.playerAnalytics.initiateAnalyticsReporter({
+      ...options,
+      sessionId: this.sessionId,
+    });
+
+    initPromise.then(({ heartbeatInterval, isInitiated, sessionId }) => {
+      this.analyticsInitiated = isInitiated;
+      this.heartbeatInterval = heartbeatInterval;
+      if (sessionId) {
+        this.sessionId = sessionId;
+      }
+      if (this.pendingHeartbeatStart) {
+        this.pendingHeartbeatStart = false;
+        this.startInterval();
+      }
+    }).catch((err) => {
+      console.warn("[PlayerAnalyticsConnector] Init failed:", err.message);
+    });
+
+    return initPromise;
   }
 
   public load(player: HTMLVideoElement) {
@@ -100,7 +117,7 @@ export class PlayerAnalyticsConnector {
             break;
         }
         try {
-          if (!this.analyticsInitiated) {
+          if (!this.initCalled) {
             console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
             return;
           }
@@ -120,6 +137,10 @@ export class PlayerAnalyticsConnector {
 
   private startInterval() {
     if (this.heartbeatIntervalTimer) return;
+    if (!this.heartbeatInterval) {
+      this.pendingHeartbeatStart = true;
+      return;
+    }
     this.heartbeatIntervalTimer = setInterval(() => {
       this.playerAnalytics.heartbeat({
         event: "heartbeat",
@@ -131,10 +152,11 @@ export class PlayerAnalyticsConnector {
   private stopInterval() {
     clearInterval(this.heartbeatIntervalTimer);
     this.heartbeatIntervalTimer = null;
+    this.pendingHeartbeatStart = false;
   }
 
   public reportBitrateChange(payload: TBitrateChangedEventPayload) {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -146,7 +168,7 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportStop() {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -159,7 +181,7 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportError(error: TErrorEventPayload) {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -177,7 +199,7 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportMetadata(payload: TMetadataEventPayload) {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -189,7 +211,7 @@ export class PlayerAnalyticsConnector {
   }
 
   public reportWarning(payload: TWarningEventPayload) {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -220,7 +242,7 @@ export class PlayerAnalyticsConnector {
   }
 
   public deinit() {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -229,10 +251,11 @@ export class PlayerAnalyticsConnector {
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
     this.analyticsInitiated = false;
+    this.initCalled = false;
   }
 
   public destroy() {
-    if (!this.analyticsInitiated) {
+    if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
@@ -242,5 +265,6 @@ export class PlayerAnalyticsConnector {
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
     this.analyticsInitiated = false;
+    this.initCalled = false;
   }
 }

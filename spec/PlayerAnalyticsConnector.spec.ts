@@ -509,4 +509,87 @@ describe("PlayerAnalyticsConnector", () => {
       );
     });
   });
+
+  describe("non-blocking init", () => {
+    it("should allow load() before init resolves (events queued)", async () => {
+      let resolveInit: (value: any) => void;
+      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      mockFetch.and.returnValue(pendingInit);
+
+      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const initPromise = connector.init({ sessionId: "test-session" });
+
+      // load() before init resolves — should NOT throw
+      mockFetch.calls.reset();
+      connector.load(mockVideoElement);
+
+      // loading event should be queued (not dispatched yet)
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      // Resolve init
+      resolveInit!({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "test-session" }),
+        statusText: "OK",
+      });
+
+      await initPromise;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // loading event should now be flushed
+      expect(mockFetch).toHaveBeenCalled();
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.event).toBe("loading");
+    });
+
+    it("should update sessionId from server response", async () => {
+      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+
+      mockFetch.and.returnValue(Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "server-generated-id" }),
+        statusText: "OK",
+      }));
+
+      await connector.init({ sessionId: "client-id" });
+
+      expect((connector as any).sessionId).toBe("server-generated-id");
+    });
+
+    it("should defer heartbeat start if PLAYING fires before init resolves", async () => {
+      let resolveInit: (value: any) => void;
+      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      mockFetch.and.returnValue(pendingInit);
+
+      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const initPromise = connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+
+      // Manually trigger startInterval (simulating PLAYING event)
+      (connector as any).startInterval();
+
+      // Should be pending, not started (no heartbeatInterval yet)
+      expect((connector as any).pendingHeartbeatStart).toBe(true);
+      expect((connector as any).heartbeatIntervalTimer).toBeUndefined();
+
+      // Resolve init
+      resolveInit!({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "test-session" }),
+        statusText: "OK",
+      });
+
+      await initPromise;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Heartbeat should now be started
+      expect((connector as any).pendingHeartbeatStart).toBe(false);
+      expect((connector as any).heartbeatIntervalTimer).toBeDefined();
+
+      // Cleanup
+      (connector as any).stopInterval();
+    });
+  });
 });

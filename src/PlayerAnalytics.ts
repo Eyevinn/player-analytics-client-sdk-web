@@ -17,7 +17,7 @@ import {
   TWarningEvent,
 } from "@eyevinn/player-analytics-specification";
 import { HEARTBEAT_INTERVAL } from "./utils/constants";
-import { Reporter } from "./utils/Reporter";
+import { Reporter, TOnSendError } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
   sessionId?: string;
@@ -29,9 +29,11 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   private debug = false;
   private eventsinkUrl: string;
   private analyticsReporter: Reporter;
-  constructor(eventsinkUrl: string, debug?: boolean) {
+  private onError?: TOnSendError;
+  constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.debug = debug ?? false;
     this.eventsinkUrl = eventsinkUrl;
+    this.onError = onError;
   }
 
   public async initiateAnalyticsReporter({
@@ -45,6 +47,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
       debug: this.debug,
       heartbeatInterval,
       shardId,
+      onError: this.onError,
     });
 
     const { sessionId: generatedSessionId, isInitiated } =
