@@ -10,5 +10,5 @@
     "emitDeclarationOnly": true,
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", "demo", "dist"]
+  "exclude": ["node_modules", "demo", "dist", "spec"]
 }

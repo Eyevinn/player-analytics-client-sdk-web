@@ -28,7 +28,7 @@ export class Reporter {
   private isInitiated = false;
 
   constructor(options: IReporterOptions) {
-    this.debug = options.debug;
+    this.debug = options.debug ?? false;
     this.shardId = options.shardId;
     this.eventsinkUrl = options.eventsinkUrl;
     this.sessionId = options.sessionId;
@@ -115,6 +115,12 @@ export class Reporter {
           "X-EPAS-Version": EPAS_VERSION,
         },
         body: JSON.stringify(payload),
+      }).then((res) => {
+        if (res && !res.ok) {
+          console.warn(`[AnalyticsReporter] Send failed: ${res.status} ${res.statusText}`);
+        }
+      }).catch((err) => {
+        console.warn('[AnalyticsReporter] Send failed:', err.message);
       });
     }
   }

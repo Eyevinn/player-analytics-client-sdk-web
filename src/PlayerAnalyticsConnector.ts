@@ -42,9 +42,8 @@ export class PlayerAnalyticsConnector {
     this.sessionId = options.sessionId;
     const { heartbeatInterval, isInitiated } =
       await this.playerAnalytics.initiateAnalyticsReporter({
-        sessionId: this.sessionId,
-        shardId: options.shardId,
         ...options,
+        sessionId: this.sessionId,
       });
 
     this.analyticsInitiated = isInitiated;
@@ -130,6 +129,7 @@ export class PlayerAnalyticsConnector {
 
   private stopInterval() {
     clearInterval(this.heartbeatIntervalTimer);
+    this.heartbeatIntervalTimer = null;
   }
 
   public reportBitrateChange(payload: TBitrateChangedEventPayload) {
@@ -207,7 +207,7 @@ export class PlayerAnalyticsConnector {
         ? this.player.duration
         : -1;
     const playhead =
-      this.player?.currentTime && duration !== -1
+      this.player?.currentTime != null && this.player.currentTime >= 0 && duration !== -1
         ? this.player?.currentTime
         : -1;
     return {
@@ -227,6 +227,7 @@ export class PlayerAnalyticsConnector {
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
+    this.analyticsInitiated = false;
   }
 
   public destroy() {
@@ -234,9 +235,11 @@ export class PlayerAnalyticsConnector {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
+    this.stopInterval();
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
-    this.stopInterval();
+    this.videoEventFilter = null;
+    this.analyticsInitiated = false;
   }
 }
