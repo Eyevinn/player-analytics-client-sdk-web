@@ -4,6 +4,7 @@ import {
   TMediaEventFilter,
 } from "@eyevinn/media-event-filter";
 import { PlayerAnalytics } from "./PlayerAnalytics";
+import { TOnSendError } from "./utils/Reporter";
 import {
   TBaseEvent,
   TBitrateChangedEventPayload,
@@ -33,9 +34,9 @@ export class PlayerAnalyticsConnector {
   private heartbeatInterval: number;
   private heartbeatIntervalTimer: ReturnType<typeof setInterval>;
 
-  constructor(eventsinkUrl: string, debug?: boolean) {
+  constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.eventsinkUrl = eventsinkUrl;
-    this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug);
+    this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug, onError);
   }
 
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {

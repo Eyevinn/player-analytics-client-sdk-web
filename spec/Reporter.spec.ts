@@ -306,6 +306,82 @@ describe("Reporter", () => {
       );
     });
 
+    it("should call onError callback on network failure instead of console.warn", async () => {
+      const errorCallback = jasmine.createSpy("onError");
+      const options: IReporterOptions = {
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+        debug: true,
+        onError: errorCallback,
+      };
+      const reporter = new Reporter(options);
+      await reporter.init();
+
+      (reporter as any).debug = false;
+      mockFetch.calls.reset();
+      mockFetch.and.returnValue(Promise.reject(new Error("Network failure")));
+
+      spyOn(console, "warn");
+
+      const eventData: TPlayerAnalyticsEvent = {
+        event: "playing",
+        sessionId: "test-session-id",
+        timestamp: 1234567890,
+        playhead: 10.5,
+        duration: 120,
+      };
+
+      reporter.send(eventData);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(errorCallback).toHaveBeenCalledWith(
+        { message: "Network failure" },
+        eventData,
+      );
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("should call onError callback on HTTP 404 instead of console.warn", async () => {
+      const errorCallback = jasmine.createSpy("onError");
+      const options: IReporterOptions = {
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+        debug: true,
+        onError: errorCallback,
+      };
+      const reporter = new Reporter(options);
+      await reporter.init();
+
+      (reporter as any).debug = false;
+      mockFetch.calls.reset();
+      mockFetch.and.returnValue(Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+      }));
+
+      spyOn(console, "warn");
+
+      const eventData: TPlayerAnalyticsEvent = {
+        event: "heartbeat",
+        sessionId: "test-session-id",
+        timestamp: 1234567890,
+        playhead: 30,
+        duration: 120,
+      };
+
+      reporter.send(eventData as TPlayerAnalyticsEvent);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(errorCallback).toHaveBeenCalledWith(
+        { status: 404, statusText: "Not Found", message: "Send failed: 404 Not Found" },
+        eventData,
+      );
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
     it("should warn and not send when not initiated", async () => {
       const options: IReporterOptions = {
         eventsinkUrl: "https://example.com/analytics",
