@@ -509,4 +509,35 @@ describe("PlayerAnalyticsConnector", () => {
       );
     });
   });
+
+  describe("onError callback", () => {
+    it("should invoke onError callback on send failure", async () => {
+      const errorCallback = jasmine.createSpy("onError");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics",
+        false,
+        errorCallback,
+      );
+      await connector.init({ sessionId: "test-session" });
+
+      // Make subsequent fetches fail with 404
+      mockFetch.and.returnValue(Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+      }));
+
+      connector.load(mockVideoElement);
+
+      // Trigger a send via reportStop
+      connector.reportStop();
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(errorCallback).toHaveBeenCalledWith(
+        jasmine.objectContaining({ status: 404, statusText: "Not Found" }),
+        jasmine.objectContaining({ event: "stopped" }),
+      );
+    });
+  });
 });

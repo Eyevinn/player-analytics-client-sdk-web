@@ -4,12 +4,24 @@ import {
 } from "@eyevinn/player-analytics-specification";
 import { EPAS_VERSION, HEARTBEAT_INTERVAL } from "./constants";
 
+export type TAnalyticsSendError = {
+  status?: number;
+  statusText?: string;
+  message: string;
+};
+
+export type TOnSendError = (
+  error: TAnalyticsSendError,
+  event: TPlayerAnalyticsEvent
+) => void;
+
 export interface IReporterOptions {
   eventsinkUrl: string;
   heartbeatInterval?: number;
   sessionId?: string;
   shardId?: string;
   debug?: boolean;
+  onError?: TOnSendError;
 }
 
 export interface IReporterPostOptions {
@@ -26,6 +38,7 @@ export class Reporter {
   private shardId?: string;
   private heartbeatInterval?: number;
   private isInitiated = false;
+  private onError?: TOnSendError;
 
   constructor(options: IReporterOptions) {
     this.debug = options.debug ?? false;
@@ -33,6 +46,7 @@ export class Reporter {
     this.eventsinkUrl = options.eventsinkUrl;
     this.sessionId = options.sessionId;
     this.heartbeatInterval = options.heartbeatInterval || HEARTBEAT_INTERVAL;
+    this.onError = options.onError;
 
     if (this.debug) {
       console.log("[AnalyticsReporter] Initiated AnalyticsReporter", options);
@@ -117,10 +131,26 @@ export class Reporter {
         body: JSON.stringify(payload),
       }).then((res) => {
         if (res && !res.ok) {
-          console.warn(`[AnalyticsReporter] Send failed: ${res.status} ${res.statusText}`);
+          const error: TAnalyticsSendError = {
+            status: res.status,
+            statusText: res.statusText,
+            message: `Send failed: ${res.status} ${res.statusText}`,
+          };
+          if (this.onError) {
+            this.onError(error, data);
+          } else {
+            console.warn(`[AnalyticsReporter] ${error.message}`);
+          }
         }
       }).catch((err) => {
-        console.warn('[AnalyticsReporter] Send failed:', err.message);
+        const error: TAnalyticsSendError = {
+          message: err.message,
+        };
+        if (this.onError) {
+          this.onError(error, data);
+        } else {
+          console.warn('[AnalyticsReporter] Send failed:', err.message);
+        }
       });
     }
   }
