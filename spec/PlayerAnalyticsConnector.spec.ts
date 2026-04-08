@@ -511,32 +511,42 @@ describe("PlayerAnalyticsConnector", () => {
   });
 
   describe("non-blocking init", () => {
+    // Helper: flush promise microtask queue
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
+    // Type-safe access to private members for test assertions
+    interface ConnectorInternals {
+      sessionId: string;
+      pendingHeartbeatStart: boolean;
+      heartbeatIntervalTimer: ReturnType<typeof setInterval> | null;
+      startInterval: () => void;
+      stopInterval: () => void;
+    }
+
     it("should allow load() before init resolves (events queued)", async () => {
-      let resolveInit: (value: any) => void;
+      let resolveInit!: (value: unknown) => void;
       const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
       mockFetch.and.returnValue(pendingInit);
 
       const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
       const initPromise = connector.init({ sessionId: "test-session" });
 
-      // load() before init resolves — should NOT throw
       mockFetch.calls.reset();
       connector.load(mockVideoElement);
 
-      // loading event should be queued (not dispatched yet)
       expect(mockFetch).not.toHaveBeenCalled();
 
-      // Resolve init
-      resolveInit!({
+      resolveInit({
         ok: true,
         json: () => Promise.resolve({ sessionId: "test-session" }),
         statusText: "OK",
       });
 
       await initPromise;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushMicrotasks();
 
-      // loading event should now be flushed
       expect(mockFetch).toHaveBeenCalled();
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body.event).toBe("loading");
@@ -552,12 +562,14 @@ describe("PlayerAnalyticsConnector", () => {
       }));
 
       await connector.init({ sessionId: "client-id" });
+      await flushMicrotasks();
 
-      expect((connector as any).sessionId).toBe("server-generated-id");
+      const internals = connector as unknown as ConnectorInternals;
+      expect(internals.sessionId).toBe("server-generated-id");
     });
 
     it("should defer heartbeat start if PLAYING fires before init resolves", async () => {
-      let resolveInit: (value: any) => void;
+      let resolveInit!: (value: unknown) => void;
       const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
       mockFetch.and.returnValue(pendingInit);
 
@@ -567,29 +579,25 @@ describe("PlayerAnalyticsConnector", () => {
         heartbeatInterval: 5000,
       });
 
-      // Manually trigger startInterval (simulating PLAYING event)
-      (connector as any).startInterval();
+      const internals = connector as unknown as ConnectorInternals;
+      internals.startInterval();
 
-      // Should be pending, not started (no heartbeatInterval yet)
-      expect((connector as any).pendingHeartbeatStart).toBe(true);
-      expect((connector as any).heartbeatIntervalTimer).toBeUndefined();
+      expect(internals.pendingHeartbeatStart).toBe(true);
+      expect(internals.heartbeatIntervalTimer).toBeUndefined();
 
-      // Resolve init
-      resolveInit!({
+      resolveInit({
         ok: true,
         json: () => Promise.resolve({ sessionId: "test-session" }),
         statusText: "OK",
       });
 
       await initPromise;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushMicrotasks();
 
-      // Heartbeat should now be started
-      expect((connector as any).pendingHeartbeatStart).toBe(false);
-      expect((connector as any).heartbeatIntervalTimer).toBeDefined();
+      expect(internals.pendingHeartbeatStart).toBe(false);
+      expect(internals.heartbeatIntervalTimer).toBeDefined();
 
-      // Cleanup
-      (connector as any).stopInterval();
+      internals.stopInterval();
     });
   });
 });

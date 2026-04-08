@@ -336,22 +336,24 @@ describe("Reporter", () => {
   });
 
   describe("event queuing during init", () => {
+    // Helper: flush promise microtask queue
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
     it("should queue events sent while init is in flight", async () => {
-      let resolveInit: (value: any) => void;
+      let resolveInit!: (value: unknown) => void;
       const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
       mockFetch.and.returnValue(pendingInit);
 
-      const options: IReporterOptions = {
+      const reporter = new Reporter({
         eventsinkUrl: "https://example.com/analytics",
         sessionId: "test-session-id",
-      };
-      const reporter = new Reporter(options);
+      });
 
-      // Start init but don't resolve yet
       const initPromise = reporter.init();
       mockFetch.calls.reset();
 
-      // Send events while init is in flight
       const event1: TPlayerAnalyticsEvent = {
         event: "playing",
         sessionId: "test-session-id",
@@ -370,23 +372,18 @@ describe("Reporter", () => {
       reporter.send(event1);
       reporter.send(event2);
 
-      // Events should be queued, not dispatched
       expect(mockFetch).not.toHaveBeenCalled();
 
-      // Now resolve init
-      resolveInit!({
+      resolveInit({
         ok: true,
         json: () => Promise.resolve({ sessionId: "server-session-id" }),
         statusText: "OK",
       });
 
       await initPromise;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushMicrotasks();
 
-      // Both events should now have been flushed
       expect(mockFetch.calls.count()).toBe(2);
-
-      // Verify events flushed in order
       const body1 = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body1.event).toBe("playing");
       const body2 = JSON.parse(mockFetch.calls.argsFor(1)[1].body);
@@ -394,15 +391,13 @@ describe("Reporter", () => {
     });
 
     it("should patch queued events with server sessionId on flush", async () => {
-      let resolveInit: (value: any) => void;
+      let resolveInit!: (value: unknown) => void;
       const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
       mockFetch.and.returnValue(pendingInit);
 
-      const options: IReporterOptions = {
+      const reporter = new Reporter({
         eventsinkUrl: "https://example.com/analytics",
-        // No client sessionId provided
-      };
-      const reporter = new Reporter(options);
+      });
       const initPromise = reporter.init();
       mockFetch.calls.reset();
 
@@ -414,15 +409,14 @@ describe("Reporter", () => {
         duration: -1,
       } as TPlayerAnalyticsEvent);
 
-      // Resolve init with server-generated sessionId
-      resolveInit!({
+      resolveInit({
         ok: true,
         json: () => Promise.resolve({ sessionId: "server-generated-id" }),
         statusText: "OK",
       });
 
       await initPromise;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushMicrotasks();
 
       expect(mockFetch.calls.count()).toBe(1);
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
@@ -435,16 +429,13 @@ describe("Reporter", () => {
         statusText: "Internal Server Error",
       }));
 
-      const options: IReporterOptions = {
+      const reporter = new Reporter({
         eventsinkUrl: "https://example.com/analytics",
         sessionId: "test-session-id",
-      };
-      const reporter = new Reporter(options);
+      });
 
-      // Start init (will fail) — queue an event during the microtask gap
       const initPromise = reporter.init();
 
-      // Manually set state to test the failed path
       reporter.send({
         event: "playing",
         sessionId: "test-session-id",
@@ -459,7 +450,6 @@ describe("Reporter", () => {
         // Expected
       }
 
-      // After failure, send should warn
       mockFetch.calls.reset();
       spyOn(console, "warn");
 
@@ -476,17 +466,15 @@ describe("Reporter", () => {
     });
 
     it("should not allow double init", async () => {
-      const options: IReporterOptions = {
+      const reporter = new Reporter({
         eventsinkUrl: "https://example.com/analytics",
         sessionId: "test-session-id",
         debug: true,
-      };
-      const reporter = new Reporter(options);
+      });
 
       const result1 = await reporter.init();
       const result2 = await reporter.init();
 
-      // Second call should return same promise/result
       expect(result1.sessionId).toBe(result2.sessionId);
     });
   });

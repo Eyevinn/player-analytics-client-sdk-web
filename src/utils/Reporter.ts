@@ -43,7 +43,7 @@ export class Reporter {
   private heartbeatInterval?: number;
   private state: ReporterState = "idle";
   private eventQueue: TPlayerAnalyticsEvent[] = [];
-  private initPromise: Promise<Record<string, any>> | null = null;
+  private initPromise: Promise<Record<string, unknown>> | null = null;
   private onError?: TOnSendError;
 
   constructor(options: IReporterOptions) {
@@ -63,7 +63,7 @@ export class Reporter {
     return this.state === "ready";
   }
 
-  public async init(sessionId?: string): Promise<Record<string, any>> {
+  public async init(sessionId?: string): Promise<Record<string, unknown>> {
     if (this.state !== "idle") {
       return this.initPromise!;
     }
@@ -97,7 +97,7 @@ export class Reporter {
     return this.initPromise;
   }
 
-  private async doInit(data: TInitEvent): Promise<Record<string, any>> {
+  private async doInit(data: TInitEvent): Promise<Record<string, unknown>> {
     try {
       const initResponse = await fetch(`${this.eventsinkUrl}`, {
         method: "POST",
@@ -148,8 +148,8 @@ export class Reporter {
         break;
       case "initializing":
         if (this.eventQueue.length >= MAX_QUEUE_SIZE) {
-          console.warn("[AnalyticsReporter] Event queue full, dropping oldest event");
-          this.eventQueue.shift();
+          console.warn("[AnalyticsReporter] Event queue full, dropping newest event");
+          break;
         }
         this.eventQueue.push(data);
         break;
@@ -168,7 +168,7 @@ export class Reporter {
     }
   }
 
-  private dispatch(data: TPlayerAnalyticsEvent): void {
+  private dispatch(data: TPlayerAnalyticsEvent): Promise<void> {
     const payload = {
       ...data,
       sessionId: this.sessionId,
@@ -176,48 +176,50 @@ export class Reporter {
     };
     if (this.debug) {
       console.log("[AnalyticsReporter] Send payload:", payload);
-    } else {
-      fetch(`${this.eventsinkUrl}`, {
-        method: "POST",
-        mode: "cors",
-        cache: "no-cache",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "X-EPAS-Event": data.event,
-          "X-EPAS-Version": EPAS_VERSION,
-        },
-        body: JSON.stringify(payload),
-      }).then((res) => {
-        if (res && !res.ok) {
-          const error: TAnalyticsSendError = {
-            status: res.status,
-            statusText: res.statusText,
-            message: `Send failed: ${res.status} ${res.statusText}`,
-          };
-          if (this.onError) {
-            this.onError(error, data);
-          } else {
-            console.warn(`[AnalyticsReporter] ${error.message}`);
-          }
-        }
-      }).catch((err) => {
+      return Promise.resolve();
+    }
+    return fetch(`${this.eventsinkUrl}`, {
+      method: "POST",
+      mode: "cors",
+      cache: "no-cache",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-EPAS-Event": data.event,
+        "X-EPAS-Version": EPAS_VERSION,
+      },
+      body: JSON.stringify(payload),
+    }).then((res) => {
+      if (res && !res.ok) {
         const error: TAnalyticsSendError = {
-          message: err.message,
+          status: res.status,
+          statusText: res.statusText,
+          message: `Send failed: ${res.status} ${res.statusText}`,
         };
         if (this.onError) {
           this.onError(error, data);
         } else {
-          console.warn("[AnalyticsReporter] Send failed:", err.message);
+          console.warn(`[AnalyticsReporter] ${error.message}`);
         }
-      });
-    }
+      }
+    }).catch((err) => {
+      const error: TAnalyticsSendError = {
+        message: err instanceof Error ? err.message : String(err),
+      };
+      if (this.onError) {
+        this.onError(error, data);
+      } else {
+        console.warn("[AnalyticsReporter] Send failed:", error.message);
+      }
+    });
   }
 
   private flushQueue(): void {
     const queued = this.eventQueue;
     this.eventQueue = [];
+    // Serialize sends to preserve event order on the wire
+    let chain = Promise.resolve();
     for (const event of queued) {
-      this.dispatch(event);
+      chain = chain.then(() => this.dispatch(event));
     }
   }
 }

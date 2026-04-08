@@ -29,9 +29,10 @@ export class PlayerAnalyticsConnector {
   private playerAnalytics: PlayerAnalytics;
   private analyticsInitiated = false;
   private initCalled = false;
+  private initGeneration = 0;
 
   private videoEventFilter: TMediaEventFilter;
-  private videoEventListener: any;
+  private videoEventListener: unknown;
 
   private heartbeatInterval: number;
   private heartbeatIntervalTimer: ReturnType<typeof setInterval>;
@@ -45,24 +46,30 @@ export class PlayerAnalyticsConnector {
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {
     this.sessionId = options.sessionId;
     this.initCalled = true;
+    const currentGeneration = ++this.initGeneration;
 
     const initPromise = this.playerAnalytics.initiateAnalyticsReporter({
       ...options,
       sessionId: this.sessionId,
     });
 
-    initPromise.then(({ heartbeatInterval, isInitiated, sessionId }) => {
-      this.analyticsInitiated = isInitiated;
-      this.heartbeatInterval = heartbeatInterval;
-      if (sessionId) {
-        this.sessionId = sessionId;
+    initPromise.then((result) => {
+      // Ignore stale init completions (e.g., if destroy() was called during init)
+      if (currentGeneration !== this.initGeneration) return;
+
+      this.analyticsInitiated = result.isInitiated === true;
+      this.heartbeatInterval = Number(result.heartbeatInterval) || this.heartbeatInterval;
+      if (typeof result.sessionId === "string" && result.sessionId) {
+        this.sessionId = result.sessionId;
       }
       if (this.pendingHeartbeatStart) {
         this.pendingHeartbeatStart = false;
         this.startInterval();
       }
-    }).catch((err) => {
-      console.warn("[PlayerAnalyticsConnector] Init failed:", err.message);
+    }).catch((err: unknown) => {
+      if (currentGeneration !== this.initGeneration) return;
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[PlayerAnalyticsConnector] Init failed:", message);
     });
 
     return initPromise;
@@ -246,6 +253,7 @@ export class PlayerAnalyticsConnector {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
+    this.initGeneration++; // Invalidate any pending init callbacks
     this.stopInterval();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
@@ -259,6 +267,7 @@ export class PlayerAnalyticsConnector {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
+    this.initGeneration++; // Invalidate any pending init callbacks
     this.stopInterval();
     this.playerAnalytics.destroy();
     this.heartbeatInterval = null;
