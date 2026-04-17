@@ -156,26 +156,6 @@ export type TMetadataEventPayload = {
 }
 ```
 
-### Error Handling
-
-By default, send failures are logged to `console.warn`. You can provide an optional `onError` callback to handle errors programmatically:
-
-```ts
-import { PlayerAnalyticsConnector, TAnalyticsSendError } from "@eyevinn/player-analytics-client-sdk-web";
-
-const analytics = new PlayerAnalyticsConnector(
-  "https://your-eventsink-url.io",
-  false, // debug
-  (error: TAnalyticsSendError, event) => {
-    // error.status - HTTP status code (e.g. 404), undefined for network errors
-    // error.statusText - HTTP status text (e.g. "Not Found")
-    // error.message - Human-readable error description
-    // event - the analytics event that failed to send
-    console.error(`Analytics send failed: ${error.message}`, event.event);
-  }
-);
-```
-
 ### Constructor Parameters
 
 These apply to both `PlayerAnalyticsConnector` and `PlayerAnalytics`:
@@ -184,7 +164,6 @@ These apply to both `PlayerAnalyticsConnector` and `PlayerAnalytics`:
 |-----------|------|---------|-------------|
 | `eventsinkUrl` | `string` | (required) | URL to your eventsink endpoint |
 | `debug` | `boolean` | `false` | When true, logs events to console instead of sending HTTP requests |
-| `onError` | `TOnSendError` | `undefined` | Optional callback invoked when a send fails. Falls back to `console.warn` if not provided |
 
 ### Init Parameters
 
@@ -248,17 +227,6 @@ Low-level API implementing the [EPAS PlayerAnalyticsClientModule](https://github
 | `warning(data)` | `TWarningEvent` |
 | `stopped(data)` | `TStoppedEvent` |
 | `metadata(data)` | `TMetadataEvent` |
-
-#### Exported Types
-
-```ts
-import type { TAnalyticsSendError, TOnSendError } from "@eyevinn/player-analytics-client-sdk-web";
-```
-
-| Type | Description |
-|------|-------------|
-| `TAnalyticsSendError` | `{ status?: number; statusText?: string; message: string }` |
-| `TOnSendError` | `(error: TAnalyticsSendError, event: TPlayerAnalyticsEvent) => void` |
 
 ## Development
 
