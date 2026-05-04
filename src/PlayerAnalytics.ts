@@ -140,6 +140,11 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   }
 
   public destroy() {
+    // Cascade destroy to the reporter so any in-flight init is aborted
+    // and queued events are discarded rather than flushed.
+    if (this.analyticsReporter) {
+      this.analyticsReporter.destroy();
+    }
     this.analyticsReporter = null;
   }
 }

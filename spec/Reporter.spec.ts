@@ -531,4 +531,64 @@ describe("Reporter", () => {
       expect(events).toEqual(["loading", "loaded", "playing"]);
     });
   });
+
+  describe("destroy()", () => {
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
+    it("should drop queued events when destroy() is called during init", async () => {
+      let resolveInit!: (value: unknown) => void;
+      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      mockFetch.and.returnValue(pendingInit);
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+      });
+
+      const initPromise = reporter.init();
+      mockFetch.calls.reset();
+
+      // Queue events during init
+      reporter.send({ event: "loading", sessionId: "test-session-id", timestamp: 1, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+      reporter.send({ event: "playing", sessionId: "test-session-id", timestamp: 2, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+
+      // Destroy BEFORE init resolves
+      reporter.destroy();
+
+      // Now resolve the init fetch — but reporter should abort, not flush
+      resolveInit({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "server-session-id" }),
+        statusText: "OK",
+      });
+
+      try { await initPromise; } catch { /* expected to reject */ }
+      await flushMicrotasks();
+
+      // No events should have been dispatched
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("should silently drop send() calls after destroy()", async () => {
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+        debug: true,
+      });
+
+      await reporter.init();
+      mockFetch.calls.reset();
+
+      reporter.destroy();
+      spyOn(console, "warn");
+
+      reporter.send({ event: "playing", sessionId: "test-session-id", timestamp: 1, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      // Don't warn — it's expected after destroy
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+  });
 });

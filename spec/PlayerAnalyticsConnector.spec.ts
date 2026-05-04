@@ -600,6 +600,36 @@ describe("PlayerAnalyticsConnector", () => {
       internals.stopInterval();
     });
 
+    it("should drop queued events when destroy() is called during init", async () => {
+      // End-to-end: load() during pending init queues a 'loading' event.
+      // destroy() must abort the init and prevent that event from reaching the wire.
+      let resolveInit!: (value: unknown) => void;
+      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      mockFetch.and.returnValue(pendingInit);
+
+      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const initPromise = connector.init({ sessionId: "test-session" });
+
+      mockFetch.calls.reset();
+      connector.load(mockVideoElement);
+      // 'loading' is queued at this point
+
+      // Destroy mid-init
+      connector.destroy();
+
+      resolveInit({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "test-session" }),
+        statusText: "OK",
+      });
+
+      try { await initPromise; } catch { /* expected */ }
+      await flushMicrotasks();
+
+      // No event should reach the wire after destroy
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("should reset pendingHeartbeatStart on init failure (no stale flag for retry)", async () => {
       // First init: PLAYING fires before init completes (sets pendingHeartbeatStart),
       // then init fails. The flag must be cleared so a retry doesn't fire heartbeats

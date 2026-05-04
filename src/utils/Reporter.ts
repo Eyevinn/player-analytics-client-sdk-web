@@ -15,7 +15,7 @@ export type TOnSendError = (
   event: TPlayerAnalyticsEvent
 ) => void;
 
-type ReporterState = "idle" | "initializing" | "ready" | "failed";
+type ReporterState = "idle" | "initializing" | "ready" | "failed" | "destroyed";
 
 const MAX_QUEUE_SIZE = 100;
 
@@ -111,6 +111,11 @@ export class Reporter {
         body: JSON.stringify(data),
       });
 
+      // Abort if destroy() was called during the await
+      if ((this.state as ReporterState) === "destroyed") {
+        throw new Error("[AnalyticsReporter] init aborted: reporter was destroyed");
+      }
+
       if (!initResponse.ok) {
         throw new Error(
           `[AnalyticsReporter] init failed: ${initResponse.statusText}`
@@ -118,6 +123,10 @@ export class Reporter {
       }
 
       const initResponseJson = await initResponse.json();
+
+      if ((this.state as ReporterState) === "destroyed") {
+        throw new Error("[AnalyticsReporter] init aborted: reporter was destroyed");
+      }
 
       if (!this.sessionId && !initResponseJson.sessionId) {
         throw new Error(`[AnalyticsReporter] init failed: no sessionId`);
@@ -131,9 +140,16 @@ export class Reporter {
       // iteration). This prevents new events from interleaving with the
       // queued chain on the wire.
       while (this.eventQueue.length > 0) {
+        if ((this.state as ReporterState) === "destroyed") {
+          throw new Error("[AnalyticsReporter] init aborted: reporter was destroyed");
+        }
         await this.flushQueue();
       }
-      this.state = "ready";
+
+      // Don't transition to ready if destroyed during flush
+      if ((this.state as ReporterState) !== "destroyed") {
+        this.state = "ready";
+      }
 
       return {
         heartbeatInterval: this.heartbeatInterval,
@@ -141,7 +157,10 @@ export class Reporter {
         isInitiated: true,
       };
     } catch (err) {
-      this.state = "failed";
+      // Don't overwrite 'destroyed' state with 'failed'
+      if ((this.state as ReporterState) !== "destroyed") {
+        this.state = "failed";
+      }
       this.eventQueue = [];
       throw err;
     }
@@ -170,6 +189,9 @@ export class Reporter {
           "[AnalyticsReporter] Init failed, cannot send:",
           data
         );
+        break;
+      case "destroyed":
+        // Silently drop — consumer has torn down, no need to warn
         break;
     }
   }
@@ -224,7 +246,19 @@ export class Reporter {
     this.eventQueue = [];
     // Serialize sends to preserve event order on the wire
     for (const event of queued) {
+      // Abort if destroy() was called mid-flush
+      if (this.state === "destroyed") return;
       await this.dispatch(event);
     }
+  }
+
+  /**
+   * Tear down the reporter. Aborts any in-flight init, discards queued
+   * events without flushing, and prevents future send() calls from
+   * dispatching. Called by PlayerAnalytics.destroy().
+   */
+  public destroy(): void {
+    this.state = "destroyed";
+    this.eventQueue = [];
   }
 }
