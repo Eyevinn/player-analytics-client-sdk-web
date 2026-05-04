@@ -477,5 +477,58 @@ describe("Reporter", () => {
 
       expect(result1.sessionId).toBe(result2.sessionId);
     });
+
+    it("should preserve event order even when send() is called between flush completion and state=ready", async () => {
+      // This test verifies the ordering barrier: events sent during the flush
+      // window must not overtake the queued chain on the wire.
+      let resolveInit!: (value: unknown) => void;
+      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      mockFetch.and.returnValue(pendingInit);
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+      });
+
+      const initPromise = reporter.init();
+      mockFetch.calls.reset();
+
+      // Queue 2 events during init
+      reporter.send({ event: "loading", sessionId: "test-session-id", timestamp: 1, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+      reporter.send({ event: "loaded", sessionId: "test-session-id", timestamp: 2, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      // Resolve init — flush starts. Make dispatch slow so we have time to call send during flush.
+      let dispatchCallCount = 0;
+      mockFetch.and.callFake(() => {
+        dispatchCallCount++;
+        // Slow down the first dispatch — gives us a window to send a new event mid-flush
+        return new Promise((resolve) => setTimeout(() => resolve({
+          ok: true, status: 200, statusText: "OK",
+        }), dispatchCallCount === 1 ? 30 : 0));
+      });
+
+      resolveInit({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "server-session-id" }),
+        statusText: "OK",
+      });
+
+      // Wait briefly so flush starts dispatching the first queued event
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      // Send a third event while flush is still in progress — must NOT overtake queue
+      reporter.send({ event: "playing", sessionId: "test-session-id", timestamp: 3, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+
+      await initPromise;
+      // Allow all serialized awaits to settle
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // All 3 events should have been sent in order: loading, loaded, playing
+      expect(mockFetch.calls.count()).toBe(3);
+      const events = mockFetch.calls.allArgs().map(args => JSON.parse(args[1].body).event);
+      expect(events).toEqual(["loading", "loaded", "playing"]);
+    });
   });
 });

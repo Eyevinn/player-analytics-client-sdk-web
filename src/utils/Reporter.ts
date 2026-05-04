@@ -126,8 +126,14 @@ export class Reporter {
         this.sessionId = initResponseJson.sessionId;
       }
 
+      // Stay in 'initializing' while flushing so that any new send() calls
+      // during flush continue to enqueue (and get flushed in the next loop
+      // iteration). This prevents new events from interleaving with the
+      // queued chain on the wire.
+      while (this.eventQueue.length > 0) {
+        await this.flushQueue();
+      }
       this.state = "ready";
-      this.flushQueue();
 
       return {
         heartbeatInterval: this.heartbeatInterval,
@@ -213,13 +219,12 @@ export class Reporter {
     });
   }
 
-  private flushQueue(): void {
+  private async flushQueue(): Promise<void> {
     const queued = this.eventQueue;
     this.eventQueue = [];
     // Serialize sends to preserve event order on the wire
-    let chain = Promise.resolve();
     for (const event of queued) {
-      chain = chain.then(() => this.dispatch(event));
+      await this.dispatch(event);
     }
   }
 }

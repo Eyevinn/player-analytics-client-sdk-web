@@ -599,5 +599,32 @@ describe("PlayerAnalyticsConnector", () => {
 
       internals.stopInterval();
     });
+
+    it("should reset pendingHeartbeatStart on init failure (no stale flag for retry)", async () => {
+      // First init: PLAYING fires before init completes (sets pendingHeartbeatStart),
+      // then init fails. The flag must be cleared so a retry doesn't fire heartbeats
+      // without a new PLAYING event.
+      mockFetch.and.returnValue(Promise.resolve({
+        ok: false,
+        statusText: "Service Unavailable",
+      }));
+
+      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const initPromise = connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+
+      const internals = connector as unknown as ConnectorInternals;
+      // Simulate PLAYING event during init
+      internals.startInterval();
+      expect(internals.pendingHeartbeatStart).toBe(true);
+
+      try { await initPromise; } catch { /* expected */ }
+      await flushMicrotasks();
+
+      // pendingHeartbeatStart must be cleared after init failure
+      expect(internals.pendingHeartbeatStart).toBe(false);
+    });
   });
 });

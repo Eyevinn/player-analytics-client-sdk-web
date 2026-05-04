@@ -68,6 +68,9 @@ export class PlayerAnalyticsConnector {
       }
     }).catch((err: unknown) => {
       if (currentGeneration !== this.initGeneration) return;
+      // Reset pendingHeartbeatStart so a retry doesn't fire heartbeats
+      // from a stale flag without a new PLAYING event.
+      this.pendingHeartbeatStart = false;
       const message = err instanceof Error ? err.message : String(err);
       console.warn("[PlayerAnalyticsConnector] Init failed:", message);
     });
