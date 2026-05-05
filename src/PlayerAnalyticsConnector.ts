@@ -257,6 +257,10 @@ export class PlayerAnalyticsConnector {
       return;
     }
     this.initGeneration++; // Invalidate any pending init callbacks
+    // Abort any in-flight init so queued events don't flush after teardown.
+    // The next init() call creates a fresh Reporter, so destroying the
+    // current one is safe even though deinit is meant to be reusable.
+    this.playerAnalytics.destroy();
     this.stopInterval();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();

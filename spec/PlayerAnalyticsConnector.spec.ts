@@ -600,6 +600,36 @@ describe("PlayerAnalyticsConnector", () => {
       internals.stopInterval();
     });
 
+    it("should drop queued events when deinit() is called during init", async () => {
+      // Same as the destroy() case but for deinit() — must also cascade
+      // to reporter.destroy() to abort the in-flight init.
+      let resolveInit!: (value: unknown) => void;
+      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      mockFetch.and.returnValue(pendingInit);
+
+      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const initPromise = connector.init({ sessionId: "test-session" });
+
+      mockFetch.calls.reset();
+      connector.load(mockVideoElement);
+      // 'loading' is queued at this point
+
+      // Deinit mid-init (instead of destroy)
+      connector.deinit();
+
+      resolveInit({
+        ok: true,
+        json: () => Promise.resolve({ sessionId: "test-session" }),
+        statusText: "OK",
+      });
+
+      try { await initPromise; } catch { /* expected */ }
+      await flushMicrotasks();
+
+      // No event should reach the wire after deinit
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("should drop queued events when destroy() is called during init", async () => {
       // End-to-end: load() during pending init queues a 'loading' event.
       // destroy() must abort the init and prevent that event from reaching the wire.
