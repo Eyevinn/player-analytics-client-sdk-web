@@ -39,7 +39,9 @@ describe("Reporter", () => {
       const [url, fetchOptions] = mockFetch.calls.argsFor(0);
       expect(url).toBe("https://example.com/analytics");
       expect(fetchOptions.method).toBe("POST");
-      expect(fetchOptions.headers["Content-Type"]).toBe("application/json; charset=utf-8");
+      expect(fetchOptions.headers["Content-Type"]).toBe(
+        "application/json; charset=utf-8"
+      );
       expect(fetchOptions.headers["X-EPAS-Event"]).toBe("init");
       expect(fetchOptions.headers["X-EPAS-Version"]).toBeDefined();
     });
@@ -269,7 +271,8 @@ describe("Reporter", () => {
 
       expect(mockFetch).toHaveBeenCalled();
       expect(console.warn).toHaveBeenCalledWith(
-        "[AnalyticsReporter] Send failed:", "Network failure"
+        "[AnalyticsReporter] Send failed:",
+        "Network failure"
       );
     });
 
@@ -284,11 +287,13 @@ describe("Reporter", () => {
 
       (reporter as any).debug = false;
       mockFetch.calls.reset();
-      mockFetch.and.returnValue(Promise.resolve({
-        ok: false,
-        status: 404,
-        statusText: "Not Found",
-      }));
+      mockFetch.and.returnValue(
+        Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+        })
+      );
 
       spyOn(console, "warn");
 
@@ -343,7 +348,9 @@ describe("Reporter", () => {
 
     it("should queue events sent while init is in flight", async () => {
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
       const reporter = new Reporter({
@@ -392,7 +399,9 @@ describe("Reporter", () => {
 
     it("should patch queued events with server sessionId on flush", async () => {
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
       const reporter = new Reporter({
@@ -424,10 +433,12 @@ describe("Reporter", () => {
     });
 
     it("should discard queued events if init fails", async () => {
-      mockFetch.and.returnValue(Promise.resolve({
-        ok: false,
-        statusText: "Internal Server Error",
-      }));
+      mockFetch.and.returnValue(
+        Promise.resolve({
+          ok: false,
+          statusText: "Internal Server Error",
+        })
+      );
 
       const reporter = new Reporter({
         eventsinkUrl: "https://example.com/analytics",
@@ -482,7 +493,9 @@ describe("Reporter", () => {
       // This test verifies the ordering barrier: events sent during the flush
       // window must not overtake the queued chain on the wire.
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
       const reporter = new Reporter({
@@ -494,8 +507,20 @@ describe("Reporter", () => {
       mockFetch.calls.reset();
 
       // Queue 2 events during init
-      reporter.send({ event: "loading", sessionId: "test-session-id", timestamp: 1, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
-      reporter.send({ event: "loaded", sessionId: "test-session-id", timestamp: 2, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+      reporter.send({
+        event: "loading",
+        sessionId: "test-session-id",
+        timestamp: 1,
+        playhead: 0,
+        duration: 0,
+      } as TPlayerAnalyticsEvent);
+      reporter.send({
+        event: "loaded",
+        sessionId: "test-session-id",
+        timestamp: 2,
+        playhead: 0,
+        duration: 0,
+      } as TPlayerAnalyticsEvent);
 
       expect(mockFetch).not.toHaveBeenCalled();
 
@@ -504,9 +529,17 @@ describe("Reporter", () => {
       mockFetch.and.callFake(() => {
         dispatchCallCount++;
         // Slow down the first dispatch — gives us a window to send a new event mid-flush
-        return new Promise((resolve) => setTimeout(() => resolve({
-          ok: true, status: 200, statusText: "OK",
-        }), dispatchCallCount === 1 ? 30 : 0));
+        return new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                ok: true,
+                status: 200,
+                statusText: "OK",
+              }),
+            dispatchCallCount === 1 ? 30 : 0
+          )
+        );
       });
 
       resolveInit({
@@ -519,7 +552,13 @@ describe("Reporter", () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
 
       // Send a third event while flush is still in progress — must NOT overtake queue
-      reporter.send({ event: "playing", sessionId: "test-session-id", timestamp: 3, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+      reporter.send({
+        event: "playing",
+        sessionId: "test-session-id",
+        timestamp: 3,
+        playhead: 0,
+        duration: 0,
+      } as TPlayerAnalyticsEvent);
 
       await initPromise;
       // Allow all serialized awaits to settle
@@ -527,7 +566,9 @@ describe("Reporter", () => {
 
       // All 3 events should have been sent in order: loading, loaded, playing
       expect(mockFetch.calls.count()).toBe(3);
-      const events = mockFetch.calls.allArgs().map(args => JSON.parse(args[1].body).event);
+      const events = mockFetch.calls
+        .allArgs()
+        .map((args) => JSON.parse(args[1].body).event);
       expect(events).toEqual(["loading", "loaded", "playing"]);
     });
   });
@@ -539,7 +580,9 @@ describe("Reporter", () => {
 
     it("should drop queued events when destroy() is called during init", async () => {
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
       const reporter = new Reporter({
@@ -551,8 +594,20 @@ describe("Reporter", () => {
       mockFetch.calls.reset();
 
       // Queue events during init
-      reporter.send({ event: "loading", sessionId: "test-session-id", timestamp: 1, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
-      reporter.send({ event: "playing", sessionId: "test-session-id", timestamp: 2, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+      reporter.send({
+        event: "loading",
+        sessionId: "test-session-id",
+        timestamp: 1,
+        playhead: 0,
+        duration: 0,
+      } as TPlayerAnalyticsEvent);
+      reporter.send({
+        event: "playing",
+        sessionId: "test-session-id",
+        timestamp: 2,
+        playhead: 0,
+        duration: 0,
+      } as TPlayerAnalyticsEvent);
 
       // Destroy BEFORE init resolves
       reporter.destroy();
@@ -564,7 +619,11 @@ describe("Reporter", () => {
         statusText: "OK",
       });
 
-      try { await initPromise; } catch { /* expected to reject */ }
+      try {
+        await initPromise;
+      } catch {
+        /* expected to reject */
+      }
       await flushMicrotasks();
 
       // No events should have been dispatched
@@ -584,7 +643,13 @@ describe("Reporter", () => {
       reporter.destroy();
       spyOn(console, "warn");
 
-      reporter.send({ event: "playing", sessionId: "test-session-id", timestamp: 1, playhead: 0, duration: 0 } as TPlayerAnalyticsEvent);
+      reporter.send({
+        event: "playing",
+        sessionId: "test-session-id",
+        timestamp: 1,
+        playhead: 0,
+        duration: 0,
+      } as TPlayerAnalyticsEvent);
 
       expect(mockFetch).not.toHaveBeenCalled();
       // Don't warn — it's expected after destroy

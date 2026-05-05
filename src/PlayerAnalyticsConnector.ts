@@ -40,7 +40,11 @@ export class PlayerAnalyticsConnector {
 
   constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.eventsinkUrl = eventsinkUrl;
-    this.playerAnalytics = new PlayerAnalytics(this.eventsinkUrl, debug, onError);
+    this.playerAnalytics = new PlayerAnalytics(
+      this.eventsinkUrl,
+      debug,
+      onError
+    );
   }
 
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {
@@ -53,27 +57,30 @@ export class PlayerAnalyticsConnector {
       sessionId: this.sessionId,
     });
 
-    initPromise.then((result) => {
-      // Ignore stale init completions (e.g., if destroy() was called during init)
-      if (currentGeneration !== this.initGeneration) return;
+    initPromise
+      .then((result) => {
+        // Ignore stale init completions (e.g., if destroy() was called during init)
+        if (currentGeneration !== this.initGeneration) return;
 
-      this.analyticsInitiated = result.isInitiated === true;
-      this.heartbeatInterval = Number(result.heartbeatInterval) || this.heartbeatInterval;
-      if (typeof result.sessionId === "string" && result.sessionId) {
-        this.sessionId = result.sessionId;
-      }
-      if (this.pendingHeartbeatStart) {
+        this.analyticsInitiated = result.isInitiated === true;
+        this.heartbeatInterval =
+          Number(result.heartbeatInterval) || this.heartbeatInterval;
+        if (typeof result.sessionId === "string" && result.sessionId) {
+          this.sessionId = result.sessionId;
+        }
+        if (this.pendingHeartbeatStart) {
+          this.pendingHeartbeatStart = false;
+          this.startInterval();
+        }
+      })
+      .catch((err: unknown) => {
+        if (currentGeneration !== this.initGeneration) return;
+        // Reset pendingHeartbeatStart so a retry doesn't fire heartbeats
+        // from a stale flag without a new PLAYING event.
         this.pendingHeartbeatStart = false;
-        this.startInterval();
-      }
-    }).catch((err: unknown) => {
-      if (currentGeneration !== this.initGeneration) return;
-      // Reset pendingHeartbeatStart so a retry doesn't fire heartbeats
-      // from a stale flag without a new PLAYING event.
-      this.pendingHeartbeatStart = false;
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn("[PlayerAnalyticsConnector] Init failed:", message);
-    });
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("[PlayerAnalyticsConnector] Init failed:", message);
+      });
 
     return initPromise;
   }
@@ -240,7 +247,9 @@ export class PlayerAnalyticsConnector {
         ? this.player.duration
         : -1;
     const playhead =
-      this.player?.currentTime != null && this.player.currentTime >= 0 && duration !== -1
+      this.player?.currentTime != null &&
+      this.player.currentTime >= 0 &&
+      duration !== -1
         ? this.player?.currentTime
         : -1;
     return {

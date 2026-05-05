@@ -58,7 +58,9 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
 
   private ensureReporter(): boolean {
     if (!this.analyticsReporter) {
-      console.warn('[PlayerAnalytics] Not initialized. Call initiateAnalyticsReporter() first.');
+      console.warn(
+        "[PlayerAnalytics] Not initialized. Call initiateAnalyticsReporter() first."
+      );
       return false;
     }
     return true;

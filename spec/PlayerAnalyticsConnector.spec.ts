@@ -1,4 +1,7 @@
-import { PlayerAnalyticsConnector, IPlayerAnalyticsConnectorInitOptions } from "../src/PlayerAnalyticsConnector";
+import {
+  PlayerAnalyticsConnector,
+  IPlayerAnalyticsConnectorInitOptions,
+} from "../src/PlayerAnalyticsConnector";
 
 describe("PlayerAnalyticsConnector", () => {
   let mockFetch: jasmine.Spy;
@@ -32,7 +35,9 @@ describe("PlayerAnalyticsConnector", () => {
 
   describe("init()", () => {
     it("should initialize analytics reporter and set analyticsInitiated to true", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
 
       const options: IPlayerAnalyticsConnectorInitOptions = {
         sessionId: "session-123",
@@ -46,7 +51,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should store heartbeatInterval from init response", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
 
       await connector.init({ heartbeatInterval: 45000 });
 
@@ -56,7 +63,9 @@ describe("PlayerAnalyticsConnector", () => {
 
   describe("load()", () => {
     it("should set player reference and send loading event", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       mockFetch.calls.reset();
@@ -71,7 +80,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should initiate video event filter", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       connector.load(mockVideoElement);
@@ -82,7 +93,9 @@ describe("PlayerAnalyticsConnector", () => {
 
   describe("playbackState()", () => {
     it("should return playhead 0 when currentTime is 0", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       mockVideoElement.currentTime = 0;
@@ -99,7 +112,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should return duration -1 for live stream (Infinity duration)", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       mockVideoElement.currentTime = 10;
@@ -116,7 +131,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should return playhead -1 when duration is -1", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       mockVideoElement.currentTime = 10;
@@ -133,7 +150,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should return correct playhead for normal playback", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       mockVideoElement.currentTime = 42.5;
@@ -160,8 +179,13 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should start heartbeat interval when startInterval is called", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
-      await connector.init({ sessionId: "test-session", heartbeatInterval: 10000 });
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 10000,
+      });
 
       connector.load(mockVideoElement);
 
@@ -178,8 +202,13 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should not start duplicate interval if already running", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
-      await connector.init({ sessionId: "test-session", heartbeatInterval: 10000 });
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 10000,
+      });
 
       connector.load(mockVideoElement);
 
@@ -194,8 +223,13 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should stop heartbeat interval when stopInterval is called", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
-      await connector.init({ sessionId: "test-session", heartbeatInterval: 10000 });
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 10000,
+      });
 
       connector.load(mockVideoElement);
 
@@ -209,8 +243,13 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should restart heartbeat after stop", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
-      await connector.init({ sessionId: "test-session", heartbeatInterval: 5000 });
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
 
       connector.load(mockVideoElement);
 
@@ -231,7 +270,9 @@ describe("PlayerAnalyticsConnector", () => {
 
   describe("report methods when not initialized", () => {
     it("should warn when reportBitrateChange is called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.reportBitrateChange({ bitrate: 5000000 });
@@ -243,7 +284,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should warn when reportMetadata is called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.reportMetadata({ contentId: "test", live: false });
@@ -254,7 +297,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should warn when reportError is called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.reportError({
@@ -269,7 +314,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should warn when reportStop is called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.reportStop();
@@ -280,7 +327,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should warn when reportWarning is called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.reportWarning({
@@ -306,7 +355,11 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should send bitrate_changed event with correct payload", () => {
-      connector.reportBitrateChange({ bitrate: 5000000, width: 1920, height: 1080 });
+      connector.reportBitrateChange({
+        bitrate: 5000000,
+        width: 1920,
+        height: 1080,
+      });
 
       expect(mockFetch).toHaveBeenCalled();
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
@@ -400,7 +453,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should set analyticsInitiated to false", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       connector.deinit();
@@ -409,8 +464,13 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should stop heartbeat interval", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
-      await connector.init({ sessionId: "test-session", heartbeatInterval: 5000 });
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
 
       connector.load(mockVideoElement);
       (connector as any).startInterval();
@@ -424,7 +484,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should teardown video event filter", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       connector.load(mockVideoElement);
@@ -439,7 +501,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should warn when called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.deinit();
@@ -460,7 +524,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should set analyticsInitiated to false", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       connector.destroy();
@@ -469,8 +535,13 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should stop heartbeat and teardown filter", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
-      await connector.init({ sessionId: "test-session", heartbeatInterval: 5000 });
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
 
       connector.load(mockVideoElement);
       (connector as any).startInterval();
@@ -488,7 +559,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should destroy playerAnalytics instance", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       await connector.init({ sessionId: "test-session" });
 
       spyOn((connector as any).playerAnalytics, "destroy");
@@ -499,7 +572,9 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should warn when called before init", () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       spyOn(console, "warn");
 
       connector.destroy();
@@ -527,10 +602,14 @@ describe("PlayerAnalyticsConnector", () => {
 
     it("should allow load() before init resolves (events queued)", async () => {
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       const initPromise = connector.init({ sessionId: "test-session" });
 
       mockFetch.calls.reset();
@@ -553,13 +632,17 @@ describe("PlayerAnalyticsConnector", () => {
     });
 
     it("should update sessionId from server response", async () => {
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
 
-      mockFetch.and.returnValue(Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ sessionId: "server-generated-id" }),
-        statusText: "OK",
-      }));
+      mockFetch.and.returnValue(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ sessionId: "server-generated-id" }),
+          statusText: "OK",
+        })
+      );
 
       await connector.init({ sessionId: "client-id" });
       await flushMicrotasks();
@@ -570,10 +653,14 @@ describe("PlayerAnalyticsConnector", () => {
 
     it("should defer heartbeat start if PLAYING fires before init resolves", async () => {
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       const initPromise = connector.init({
         sessionId: "test-session",
         heartbeatInterval: 5000,
@@ -604,10 +691,14 @@ describe("PlayerAnalyticsConnector", () => {
       // Same as the destroy() case but for deinit() — must also cascade
       // to reporter.destroy() to abort the in-flight init.
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       const initPromise = connector.init({ sessionId: "test-session" });
 
       mockFetch.calls.reset();
@@ -623,7 +714,11 @@ describe("PlayerAnalyticsConnector", () => {
         statusText: "OK",
       });
 
-      try { await initPromise; } catch { /* expected */ }
+      try {
+        await initPromise;
+      } catch {
+        /* expected */
+      }
       await flushMicrotasks();
 
       // No event should reach the wire after deinit
@@ -634,10 +729,14 @@ describe("PlayerAnalyticsConnector", () => {
       // End-to-end: load() during pending init queues a 'loading' event.
       // destroy() must abort the init and prevent that event from reaching the wire.
       let resolveInit!: (value: unknown) => void;
-      const pendingInit = new Promise((resolve) => { resolveInit = resolve; });
+      const pendingInit = new Promise((resolve) => {
+        resolveInit = resolve;
+      });
       mockFetch.and.returnValue(pendingInit);
 
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       const initPromise = connector.init({ sessionId: "test-session" });
 
       mockFetch.calls.reset();
@@ -653,7 +752,11 @@ describe("PlayerAnalyticsConnector", () => {
         statusText: "OK",
       });
 
-      try { await initPromise; } catch { /* expected */ }
+      try {
+        await initPromise;
+      } catch {
+        /* expected */
+      }
       await flushMicrotasks();
 
       // No event should reach the wire after destroy
@@ -664,12 +767,16 @@ describe("PlayerAnalyticsConnector", () => {
       // First init: PLAYING fires before init completes (sets pendingHeartbeatStart),
       // then init fails. The flag must be cleared so a retry doesn't fire heartbeats
       // without a new PLAYING event.
-      mockFetch.and.returnValue(Promise.resolve({
-        ok: false,
-        statusText: "Service Unavailable",
-      }));
+      mockFetch.and.returnValue(
+        Promise.resolve({
+          ok: false,
+          statusText: "Service Unavailable",
+        })
+      );
 
-      const connector = new PlayerAnalyticsConnector("https://example.com/analytics");
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
       const initPromise = connector.init({
         sessionId: "test-session",
         heartbeatInterval: 5000,
@@ -680,7 +787,11 @@ describe("PlayerAnalyticsConnector", () => {
       internals.startInterval();
       expect(internals.pendingHeartbeatStart).toBe(true);
 
-      try { await initPromise; } catch { /* expected */ }
+      try {
+        await initPromise;
+      } catch {
+        /* expected */
+      }
       await flushMicrotasks();
 
       // pendingHeartbeatStart must be cleared after init failure

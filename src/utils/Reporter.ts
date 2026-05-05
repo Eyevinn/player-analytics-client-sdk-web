@@ -113,7 +113,9 @@ export class Reporter {
 
       // Abort if destroy() was called during the await
       if ((this.state as ReporterState) === "destroyed") {
-        throw new Error("[AnalyticsReporter] init aborted: reporter was destroyed");
+        throw new Error(
+          "[AnalyticsReporter] init aborted: reporter was destroyed"
+        );
       }
 
       if (!initResponse.ok) {
@@ -125,7 +127,9 @@ export class Reporter {
       const initResponseJson = await initResponse.json();
 
       if ((this.state as ReporterState) === "destroyed") {
-        throw new Error("[AnalyticsReporter] init aborted: reporter was destroyed");
+        throw new Error(
+          "[AnalyticsReporter] init aborted: reporter was destroyed"
+        );
       }
 
       if (!this.sessionId && !initResponseJson.sessionId) {
@@ -141,7 +145,9 @@ export class Reporter {
       // queued chain on the wire.
       while (this.eventQueue.length > 0) {
         if ((this.state as ReporterState) === "destroyed") {
-          throw new Error("[AnalyticsReporter] init aborted: reporter was destroyed");
+          throw new Error(
+            "[AnalyticsReporter] init aborted: reporter was destroyed"
+          );
         }
         await this.flushQueue();
       }
@@ -173,7 +179,9 @@ export class Reporter {
         break;
       case "initializing":
         if (this.eventQueue.length >= MAX_QUEUE_SIZE) {
-          console.warn("[AnalyticsReporter] Event queue full, dropping newest event");
+          console.warn(
+            "[AnalyticsReporter] Event queue full, dropping newest event"
+          );
           break;
         }
         this.eventQueue.push(data);
@@ -185,10 +193,7 @@ export class Reporter {
         );
         break;
       case "failed":
-        console.warn(
-          "[AnalyticsReporter] Init failed, cannot send:",
-          data
-        );
+        console.warn("[AnalyticsReporter] Init failed, cannot send:", data);
         break;
       case "destroyed":
         // Silently drop — consumer has torn down, no need to warn
@@ -216,29 +221,31 @@ export class Reporter {
         "X-EPAS-Version": EPAS_VERSION,
       },
       body: JSON.stringify(payload),
-    }).then((res) => {
-      if (res && !res.ok) {
+    })
+      .then((res) => {
+        if (res && !res.ok) {
+          const error: TAnalyticsSendError = {
+            status: res.status,
+            statusText: res.statusText,
+            message: `Send failed: ${res.status} ${res.statusText}`,
+          };
+          if (this.onError) {
+            this.onError(error, data);
+          } else {
+            console.warn(`[AnalyticsReporter] ${error.message}`);
+          }
+        }
+      })
+      .catch((err) => {
         const error: TAnalyticsSendError = {
-          status: res.status,
-          statusText: res.statusText,
-          message: `Send failed: ${res.status} ${res.statusText}`,
+          message: err instanceof Error ? err.message : String(err),
         };
         if (this.onError) {
           this.onError(error, data);
         } else {
-          console.warn(`[AnalyticsReporter] ${error.message}`);
+          console.warn("[AnalyticsReporter] Send failed:", error.message);
         }
-      }
-    }).catch((err) => {
-      const error: TAnalyticsSendError = {
-        message: err instanceof Error ? err.message : String(err),
-      };
-      if (this.onError) {
-        this.onError(error, data);
-      } else {
-        console.warn("[AnalyticsReporter] Send failed:", error.message);
-      }
-    });
+      });
   }
 
   private async flushQueue(): Promise<void> {

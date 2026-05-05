@@ -1,5 +1,7 @@
-import { PlayerAnalytics, IPlayerAnalyticsInitOptions } from "../src/PlayerAnalytics";
-import { Reporter } from "../src/utils/Reporter";
+import {
+  PlayerAnalytics,
+  IPlayerAnalyticsInitOptions,
+} from "../src/PlayerAnalytics";
 import {
   TPlayingEvent,
   TPausedEvent,
@@ -296,7 +298,10 @@ describe("PlayerAnalytics", () => {
 
   describe("debug mode", () => {
     it("should not call fetch when debug mode is enabled", async () => {
-      const analytics = new PlayerAnalytics("https://example.com/analytics", true);
+      const analytics = new PlayerAnalytics(
+        "https://example.com/analytics",
+        true
+      );
 
       spyOn(console, "log");
 
@@ -307,7 +312,10 @@ describe("PlayerAnalytics", () => {
     });
 
     it("should log events to console in debug mode", async () => {
-      const analytics = new PlayerAnalytics("https://example.com/analytics", true);
+      const analytics = new PlayerAnalytics(
+        "https://example.com/analytics",
+        true
+      );
 
       spyOn(console, "log");
 
