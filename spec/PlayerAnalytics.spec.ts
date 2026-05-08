@@ -1,5 +1,7 @@
-import { PlayerAnalytics, IPlayerAnalyticsInitOptions } from "../src/PlayerAnalytics";
-import { Reporter } from "../src/utils/Reporter";
+import {
+  PlayerAnalytics,
+  IPlayerAnalyticsInitOptions,
+} from "../src/PlayerAnalytics";
 import {
   TPlayingEvent,
   TPausedEvent,
@@ -157,7 +159,8 @@ describe("PlayerAnalytics", () => {
       expect(mockFetch).toHaveBeenCalled();
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body.event).toBe("playing");
-      expect(body.sessionId).toBe("test-session");
+      // Reporter uses its authoritative sessionId (from server init response)
+      expect(body.sessionId).toBe("test-session-id");
     });
 
     it("should call reporter.send with correct data for pause()", () => {
@@ -295,7 +298,10 @@ describe("PlayerAnalytics", () => {
 
   describe("debug mode", () => {
     it("should not call fetch when debug mode is enabled", async () => {
-      const analytics = new PlayerAnalytics("https://example.com/analytics", true);
+      const analytics = new PlayerAnalytics(
+        "https://example.com/analytics",
+        true
+      );
 
       spyOn(console, "log");
 
@@ -306,7 +312,10 @@ describe("PlayerAnalytics", () => {
     });
 
     it("should log events to console in debug mode", async () => {
-      const analytics = new PlayerAnalytics("https://example.com/analytics", true);
+      const analytics = new PlayerAnalytics(
+        "https://example.com/analytics",
+        true
+      );
 
       spyOn(console, "log");
 

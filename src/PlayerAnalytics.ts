@@ -17,7 +17,7 @@ import {
   TWarningEvent,
 } from "@eyevinn/player-analytics-specification";
 import { HEARTBEAT_INTERVAL } from "./utils/constants";
-import { Reporter } from "./utils/Reporter";
+import { Reporter, TOnSendError } from "./utils/Reporter";
 
 export interface IPlayerAnalyticsInitOptions {
   sessionId?: string;
@@ -29,9 +29,11 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   private debug = false;
   private eventsinkUrl: string;
   private analyticsReporter: Reporter;
-  constructor(eventsinkUrl: string, debug?: boolean) {
+  private onError?: TOnSendError;
+  constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.debug = debug ?? false;
     this.eventsinkUrl = eventsinkUrl;
+    this.onError = onError;
   }
 
   public async initiateAnalyticsReporter({
@@ -45,6 +47,7 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
       debug: this.debug,
       heartbeatInterval,
       shardId,
+      onError: this.onError,
     });
 
     const { sessionId: generatedSessionId, isInitiated } =
@@ -55,7 +58,9 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
 
   private ensureReporter(): boolean {
     if (!this.analyticsReporter) {
-      console.warn('[PlayerAnalytics] Not initialized. Call initiateAnalyticsReporter() first.');
+      console.warn(
+        "[PlayerAnalytics] Not initialized. Call initiateAnalyticsReporter() first."
+      );
       return false;
     }
     return true;
@@ -137,6 +142,11 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
   }
 
   public destroy() {
+    // Cascade destroy to the reporter so any in-flight init is aborted
+    // and queued events are discarded rather than flushed.
+    if (this.analyticsReporter) {
+      this.analyticsReporter.destroy();
+    }
     this.analyticsReporter = null;
   }
 }
