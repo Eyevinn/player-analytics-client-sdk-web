@@ -12,3 +12,5 @@ export type {
   TAnalyticsSendError,
   TOnSendError,
 } from "./src/utils/Reporter";
+
+export type { TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
