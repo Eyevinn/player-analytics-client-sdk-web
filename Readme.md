@@ -26,32 +26,32 @@ The quickest way to get started is to setup an EPAS compatible backend in [Eyevi
 import { PlayerAnalyticsConnector } from "@eyevinn/player-analytics-client-sdk-web";
 
 // Create your instance and set the analytics eventsink endpoint
-const playerAnalytics = new PlayerAnalyticsConnector(
+const analytics = new PlayerAnalyticsConnector(
   "https://your-eventsink-url.io"
 );
 
 // Initiate the analytics with the base data needed
-// This will create you session in the backend
+// This will create your session in the backend
 try {
-  await playerAnalytics.init({
+  await analytics.init({
     sessionId: "generated-unique-uuid-session-id",
   });
 
   // Get your video element from the site, or your video player of choice
   const videoElement = document.querySelector("video");
   // Load the analytics library with the video element to fetch the events
-  playerAnalytics.load(videoElement);
+  analytics.load(videoElement);
 } catch (err) {
   console.error(err);
   // Remove event listeners and heartbeat timers if init fails.
-  playerAnalytics.deinit();
+  analytics.deinit();
 }
 ```
 
-Due to bitrate changes not being reported, and errors not being reported in any descriptive way, there is a possibility to do separate calls for these events - which you may trigger based on you video player of choice following these examples.
+Due to bitrate changes not being reported, and errors not being reported in any descriptive way, there is a possibility to do separate calls for these events - which you may trigger based on your video player of choice following these examples.
 
 ```js
-playerAnalytics.reportBitrateChange({
+analytics.reportBitrateChange({
   bitrate: 246.440, // bitrate in Kbps
   width: 320, // optional, video width in pixels
   height: 136, // optional, video height in pixels
@@ -61,8 +61,8 @@ playerAnalytics.reportBitrateChange({
 ```
 
 ```js
-// error is fatal, i.e. sends an end event as well
-playerAnalytics.reportError({
+// error is fatal, i.e. sends a stopped event as well
+analytics.reportError({
   category: "", // optional, eg. NETWORK, DECODER, etc.
   code: "",
   message: "", // optional
@@ -70,7 +70,7 @@ playerAnalytics.reportError({
 });
 
 // warning is not fatal
-playerAnalytics.reportWarning({
+analytics.reportWarning({
   category: "", // optional, eg. NETWORK, DECODER, etc.
   code: "",
   message: "", // optional
@@ -79,12 +79,14 @@ playerAnalytics.reportWarning({
 ```
 
 ```js
-// when leaving the player, to stop the analytics in a correct manor
-playerAnalytics.reportStop();
-playerAnalytics.destroy();
+// when leaving the player, to stop the analytics in a correct manner
+analytics.reportStop();
+analytics.destroy();
 ```
 
 ### Manual Event Triggering
+
+Use the `PlayerAnalytics` class directly for full control over when events are sent.
 
 ```js
 import { PlayerAnalytics } from "@eyevinn/player-analytics-client-sdk-web";
@@ -93,9 +95,6 @@ import { PlayerAnalytics } from "@eyevinn/player-analytics-client-sdk-web";
 const playerAnalytics = new PlayerAnalytics("https://your-eventsink-url.io");
 await playerAnalytics.initiateAnalyticsReporter({
   sessionId: "generated-unique-uuid-session-id",
-  contentId: "big-buck-bunny-720",
-  contentUrl:
-    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4",
 });
 
 // then trigger the method calls accordingly, e.g.
@@ -104,8 +103,8 @@ videoElement.addEventListener("play", () => {
   playerAnalytics.playing({
     event: "playing",
     timestamp: Date.now(),
-    playhead: 0,
-    duration: 3600,
+    playhead: videoElement.currentTime,
+    duration: videoElement.duration,
     sessionId: "generated-unique-uuid-session-id",
   });
 });
@@ -113,78 +112,204 @@ videoElement.addEventListener("play", () => {
 
 ### Report Metadata
 
-You can report your metadata at a later stage in your code and tailor ther callbacks for your tech stach, for example when you have parsed your manifest.
-In this example we're using hls.js
+You can report metadata at a later stage in your code and tailor the callbacks for your tech stack, for example when you have parsed your manifest.
+In this example we're using hls.js with the `PlayerAnalyticsConnector`:
 
 ```js
 import Hls from "hls.js";
 import { PlayerAnalyticsConnector } from "@eyevinn/player-analytics-client-sdk-web";
 
-// Create your instance and set the analytics eventsink endpoint
-const playerAnalytics = new PlayerAnalytics("https://your-eventsink-url.io");
-await playerAnalytics.initiateAnalyticsReporter({
+const analytics = new PlayerAnalyticsConnector("https://your-eventsink-url.io");
+await analytics.init({
   sessionId: "generated-unique-uuid-session-id",
 });
 
 const hls = new Hls();
 const videoElement = document.querySelector("video");
 
+analytics.load(videoElement);
 hls.attachMedia(videoElement);
-hls.load(src);
+hls.loadSource(src);
 hls.on(Hls.Events.LEVEL_LOADED, (event, data) => {
-  playerAnalytics.metadata({
-    live: data?.details?.level?.live,
+  analytics.reportMetadata({
+    live: data?.details?.live,
+    contentTitle: "My Video",
+    contentUrl: src,
   });
 });
 ```
 
-These are the available keys for metadata, which can be sent anytime between a `init` and a `stopped` call.
+These are the available keys for metadata, which can be sent anytime between an `init` and a `stopped` call.
 
 ```ts
-export interface TMetadataEventPayload {
-    live?: boolean;
-    contentTitle?: string;
-    contentId?: string;
-    contentUrl?: string;
-    drmType?: string;
-    userId?: string;
-    deviceId?: string;
-    deviceModel?: string;
-    deviceType?: string;
+export type TMetadataEventPayload = {
+  live?: boolean;
+  contentTitle?: string;
+  contentId?: string;
+  contentUrl?: string;
+  drmType?: string;
+  userId?: string;
+  deviceId?: string;
+  deviceModel?: string;
+  deviceType?: string;
+  [key: string]: string | boolean; // additional custom metadata
 }
 ```
 
-### Constructor parameters
+### Events Tracked
 
-These applies to both the `PlayerAnalyticsConnector` and `PlayerAnalytics`.
+When you call `analytics.load(videoElement)` on `PlayerAnalyticsConnector`, the SDK attaches listeners via [`@eyevinn/media-event-filter`](https://github.com/Eyevinn/media-event-filter) and emits the following EPAS events automatically:
 
-- `eventsinkUrl`, the url to your event sink.
-- `debug`, default false, triggers output to dev console rather than actual http posts.
+| Native trigger | EPAS event |
+|----------------|------------|
+| Media element load | `loading` (sent on `load()`) |
+| First playable state | `loaded` |
+| `playing` | `playing` (also starts the heartbeat) |
+| `pause` | `paused` |
+| `seeking` | `seeking` |
+| `seeked` | `seeked` |
+| Buffer stall | `buffering` |
+| Buffer recovery | `buffered` |
+| `ended` | `stopped` (`reason: "ended"`) |
 
-### Init parameters
+`bitrate_changed`, `error`, `warning`, `metadata`, and manual `stopped` (`reason: "aborted"`) are **not** auto-detected — call the corresponding `report*` methods when you have the data. A `heartbeat` event is sent every `heartbeatInterval` ms while the player is in the `playing` state (see [Init Parameters](#init-parameters) below).
+
+### Constructor Parameters
+
+Both `PlayerAnalyticsConnector` and `PlayerAnalytics` share the same constructor signature `(eventsinkUrl, debug?, onError?)`:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `eventsinkUrl` | `string` | (required) | URL to your eventsink endpoint |
+| `debug` | `boolean` | `false` | When true, logs events to console instead of sending HTTP requests |
+| `onError` | `TOnSendError` | `undefined` | Optional callback invoked when a send fails. Falls back to `console.warn` if not provided |
+
+### Init Parameters
 
 ```ts
 export interface IPlayerAnalyticsConnectorInitOptions {
-  sessionId?: string; // should be generated by the backend if not sent in
-  shardId?: string; // optional grouping or clustering events throughout the 
-                    // pipeline to allow sharding at various stages of a pipeline
-  hearbeatInterval?: number; //Defaults to 30_000 (ms)
+  sessionId?: string;    // Generated by the backend if not provided
+  shardId?: string;      // Optional grouping key for sharding events in the pipeline
+  heartbeatInterval?: number; // Defaults to HEARTBEAT_INTERVAL (see src/utils/constants.ts)
 }
 ```
 
-As an example:
+Example:
 
 ```ts
-const eventsinkUrl =
-  "https://eyevinnlab-epasdev.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/";
-const analytics = new PlayerAnalyticsConnector(eventsinkUrl, false);
+const analytics = new PlayerAnalyticsConnector(
+  "https://eyevinnlab-epasdev.eyevinn-player-analytics-eventsink.auto.prod.osaas.io/"
+);
 await analytics.init({
   sessionId: `demo-page-${Date.now()}`,
-  shardId: 'myshard1',
+  shardId: "myshard1",
   heartbeatInterval: 10000,
 });
-
 ```
+
+### Error Handling
+
+By default, send failures are logged to `console.warn`. You can provide an optional `onError` callback (see [Constructor Parameters](#constructor-parameters) above) to handle errors programmatically:
+
+```ts
+import {
+  PlayerAnalyticsConnector,
+  TAnalyticsSendError,
+  TPlayerAnalyticsEvent,
+} from "@eyevinn/player-analytics-client-sdk-web";
+
+const analytics = new PlayerAnalyticsConnector(
+  "https://your-eventsink-url.io",
+  false, // debug
+  (error: TAnalyticsSendError, event: TPlayerAnalyticsEvent) => {
+    // error.status - HTTP status code (e.g. 404), undefined for network errors
+    // error.statusText - HTTP status text (e.g. "Not Found")
+    // error.message - Human-readable error description
+    // event - the analytics event that failed to send
+    console.error(`Analytics send failed: ${error.message}`, event.event);
+  }
+);
+```
+
+### API Reference
+
+#### PlayerAnalyticsConnector
+
+High-level API that automatically listens to `HTMLVideoElement` events.
+
+| Method | Description |
+|--------|-------------|
+| `init(options)` | Connect to eventsink and create a session |
+| `load(videoElement)` | Attach to a video element and start listening for events |
+| `reportBitrateChange(payload)` | Report a bitrate change event |
+| `reportError(payload)` | Report a fatal error (also sends a stopped event) |
+| `reportWarning(payload)` | Report a non-fatal warning |
+| `reportMetadata(payload)` | Report metadata (content info, device info, etc.) |
+| `reportStop()` | Report that playback was stopped by the user |
+| `deinit()` | Stop heartbeat and remove event listeners (keeps instance reusable) |
+| `destroy()` | Fully tear down the instance |
+
+#### PlayerAnalytics
+
+Low-level API implementing the [EPAS PlayerAnalyticsClientModule](https://github.com/Eyevinn/player-analytics-specification) interface. `initiateAnalyticsReporter()` must be called before any event method — other calls no-op with a warning until then.
+
+**Lifecycle**
+
+| Method | Description |
+|--------|-------------|
+| `initiateAnalyticsReporter(options)` | Connect to eventsink and create a session (required first call). Accepts `IPlayerAnalyticsInitOptions`. |
+| `destroy()` | Tear down the reporter and discard queued events. |
+
+**EPAS event methods**
+
+Each accepts a full EPAS event object.
+
+| Method | Event Type |
+|--------|------------|
+| `init(data)` | `TInitEvent` |
+| `heartbeat(data)` | `THeartbeatEvent` |
+| `loading(data)` | `TLoadingEvent` |
+| `loaded(data)` | `TLoadedEvent` |
+| `playing(data)` | `TPlayingEvent` |
+| `pause(data)` | `TPausedEvent` |
+| `buffering(data)` | `TBufferingEvent` |
+| `buffered(data)` | `TBufferedEvent` |
+| `seeking(data)` | `TSeekingEvent` |
+| `seeked(data)` | `TSeekedEvent` |
+| `bitrateChanged(data)` | `TBitrateChangedEvent` |
+| `error(data)` | `TErrorEvent` |
+| `warning(data)` | `TWarningEvent` |
+| `stopped(data)` | `TStoppedEvent` |
+| `metadata(data)` | `TMetadataEvent` |
+
+#### Exports
+
+**Classes**
+
+| Class | Description |
+|-------|-------------|
+| `PlayerAnalyticsConnector` | High-level, auto-listening API (see above) |
+| `PlayerAnalytics` | Low-level, EPAS-compliant API (see above) |
+
+**Types**
+
+```ts
+import type {
+  IPlayerAnalyticsConnectorInitOptions,
+  IPlayerAnalyticsInitOptions,
+  TAnalyticsSendError,
+  TOnSendError,
+  TPlayerAnalyticsEvent,
+} from "@eyevinn/player-analytics-client-sdk-web";
+```
+
+| Type | Description |
+|------|-------------|
+| `IPlayerAnalyticsConnectorInitOptions` | Options passed to `PlayerAnalyticsConnector.init()` — `{ sessionId?, shardId?, heartbeatInterval? }` |
+| `IPlayerAnalyticsInitOptions` | Options passed to `PlayerAnalytics.initiateAnalyticsReporter()` — same shape as above |
+| `TAnalyticsSendError` | `{ status?: number; statusText?: string; message: string }` — `status`/`statusText` are set on HTTP errors, absent on network errors |
+| `TOnSendError` | `(error: TAnalyticsSendError, event: TPlayerAnalyticsEvent) => void` |
+| `TPlayerAnalyticsEvent` | Union of all EPAS event types — re-exported from [`@eyevinn/player-analytics-specification`](https://github.com/Eyevinn/player-analytics-specification) |
 
 ## Development
 
