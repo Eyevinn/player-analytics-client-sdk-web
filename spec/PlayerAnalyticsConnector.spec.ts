@@ -127,10 +127,52 @@ describe("PlayerAnalyticsConnector", () => {
 
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body.duration).toBe(-1);
-      expect(body.playhead).toBe(-1);
     });
 
-    it("should return playhead -1 when duration is -1", async () => {
+    it("should report a valid playhead for live content (Infinity duration)", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+
+      mockVideoElement.currentTime = 37.5;
+      mockVideoElement.duration = Infinity;
+
+      connector.load(mockVideoElement);
+
+      mockFetch.calls.reset();
+      connector.reportMetadata({ contentId: "test", live: true });
+
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      // Playhead must be decoupled from duration: -1 means "unknown", not "live".
+      expect(body.duration).toBe(-1);
+      expect(body.playhead).not.toBe(-1);
+      expect(body.playhead).toBe(37.5);
+    });
+
+    it("should report a valid playhead for VOD before duration metadata is available", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+
+      // Duration not yet known (e.g. loadedmetadata hasn't fired) but the
+      // player already exposes a valid currentTime.
+      mockVideoElement.currentTime = 5;
+      mockVideoElement.duration = undefined;
+
+      connector.load(mockVideoElement);
+
+      mockFetch.calls.reset();
+      connector.reportMetadata({ contentId: "test", live: false });
+
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.duration).toBe(-1);
+      expect(body.playhead).not.toBe(-1);
+      expect(body.playhead).toBe(5);
+    });
+
+    it("should normalize duration 0 to -1 while keeping a valid playhead", async () => {
       const connector = new PlayerAnalyticsConnector(
         "https://example.com/analytics"
       );
@@ -146,6 +188,25 @@ describe("PlayerAnalyticsConnector", () => {
 
       const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body.duration).toBe(-1);
+      // Playhead is independent of duration normalization.
+      expect(body.playhead).toBe(10);
+    });
+
+    it("should return playhead -1 when currentTime is invalid", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+
+      mockVideoElement.currentTime = -1;
+      mockVideoElement.duration = 100;
+
+      connector.load(mockVideoElement);
+
+      mockFetch.calls.reset();
+      connector.reportMetadata({ contentId: "test", live: false });
+
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
       expect(body.playhead).toBe(-1);
     });
 

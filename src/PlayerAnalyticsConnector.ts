@@ -247,9 +247,7 @@ export class PlayerAnalyticsConnector {
         ? this.player.duration
         : -1;
     const playhead =
-      this.player?.currentTime != null &&
-      this.player.currentTime >= 0 &&
-      duration !== -1
+      this.player?.currentTime != null && this.player.currentTime >= 0
         ? this.player?.currentTime
         : -1;
     return {
