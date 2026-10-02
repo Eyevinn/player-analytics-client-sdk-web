@@ -25,6 +25,172 @@ describe("Reporter", () => {
     globalThis.fetch = originalFetch;
   });
 
+  describe("sendBeacon()", () => {
+    let navigatorDescriptor: PropertyDescriptor | undefined;
+
+    function setNavigator(value: any) {
+      Object.defineProperty(globalThis, "navigator", {
+        value,
+        configurable: true,
+        writable: true,
+      });
+    }
+
+    beforeEach(() => {
+      navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator"
+      );
+    });
+
+    afterEach(() => {
+      // Restore the original navigator descriptor
+      if (navigatorDescriptor) {
+        Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+      } else {
+        delete (globalThis as any).navigator;
+      }
+    });
+
+    const stoppedEvent: TPlayerAnalyticsEvent = {
+      event: "stopped",
+      sessionId: "test-session-id",
+      timestamp: 1234567890,
+      playhead: 42,
+      duration: 120,
+      payload: { reason: "aborted" },
+    } as TPlayerAnalyticsEvent;
+
+    async function readBlobJson(blob: Blob): Promise<any> {
+      return JSON.parse(await blob.text());
+    }
+
+    it("should send via navigator.sendBeacon with a text/plain JSON body (no fetch, no X-EPAS headers)", async () => {
+      const sendBeaconSpy = jasmine
+        .createSpy("sendBeacon")
+        .and.returnValue(true);
+      setNavigator({ sendBeacon: sendBeaconSpy });
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+        shardId: "shard-123",
+      });
+      await reporter.init("test-session-id");
+      mockFetch.calls.reset();
+
+      const result = reporter.sendBeacon(stoppedEvent);
+
+      expect(result).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+
+      const [url, blob] = sendBeaconSpy.calls.argsFor(0);
+      expect(url).toBe("https://example.com/analytics");
+      expect(blob instanceof Blob).toBe(true);
+      expect((blob as Blob).type).toContain("text/plain");
+
+      const body = await readBlobJson(blob as Blob);
+      expect(body.event).toBe("stopped");
+      // Reporter stamps its authoritative session identifiers (the server
+      // init response's sessionId wins) onto the payload
+      expect(body.sessionId).toBe("server-generated-id");
+      expect(body.shardId).toBe("shard-123");
+      expect(body.payload.reason).toBe("aborted");
+    });
+
+    it("should fall back to keepalive fetch when sendBeacon is unavailable", async () => {
+      setNavigator({});
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+      });
+      await reporter.init("test-session-id");
+      mockFetch.calls.reset();
+
+      const result = reporter.sendBeacon(stoppedEvent);
+
+      expect(result).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, fetchOptions] = mockFetch.calls.argsFor(0);
+      expect(url).toBe("https://example.com/analytics");
+      expect(fetchOptions.method).toBe("POST");
+      expect(fetchOptions.keepalive).toBe(true);
+      expect(fetchOptions.headers["Content-Type"]).toContain("text/plain");
+      // No X-EPAS-* headers on the beacon path (avoids the dropped preflight)
+      expect(fetchOptions.headers["X-EPAS-Event"]).toBeUndefined();
+      const body = JSON.parse(fetchOptions.body);
+      expect(body.event).toBe("stopped");
+      expect(body.sessionId).toBe("server-generated-id");
+    });
+
+    it("should fall back to keepalive fetch when sendBeacon returns false", async () => {
+      const sendBeaconSpy = jasmine
+        .createSpy("sendBeacon")
+        .and.returnValue(false);
+      setNavigator({ sendBeacon: sendBeaconSpy });
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+      });
+      await reporter.init("test-session-id");
+      mockFetch.calls.reset();
+
+      const result = reporter.sendBeacon(stoppedEvent);
+
+      expect(result).toBe(true);
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.calls.argsFor(0)[1].keepalive).toBe(true);
+    });
+
+    it("should log instead of sending in debug mode", async () => {
+      const sendBeaconSpy = jasmine
+        .createSpy("sendBeacon")
+        .and.returnValue(true);
+      setNavigator({ sendBeacon: sendBeaconSpy });
+      spyOn(console, "log");
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "debug-session-id",
+        debug: true,
+      });
+      await reporter.init("debug-session-id");
+      mockFetch.calls.reset();
+
+      const result = reporter.sendBeacon(stoppedEvent);
+
+      expect(result).toBe(true);
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(console.log).toHaveBeenCalled();
+    });
+
+    it("should return false and not send after destroy()", async () => {
+      const sendBeaconSpy = jasmine
+        .createSpy("sendBeacon")
+        .and.returnValue(true);
+      setNavigator({ sendBeacon: sendBeaconSpy });
+
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+      });
+      await reporter.init("test-session-id");
+      reporter.destroy();
+      mockFetch.calls.reset();
+
+      const result = reporter.sendBeacon(stoppedEvent);
+
+      expect(result).toBe(false);
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe("init()", () => {
     it("should call fetch with correct URL and headers", async () => {
       const options: IReporterOptions = {

@@ -141,6 +141,18 @@ export class PlayerAnalytics implements PlayerAnalyticsClientModule {
     this.analyticsReporter.send(data);
   }
 
+  /**
+   * Send a stopped event over the reporter's unload-safe beacon transport
+   * (navigator.sendBeacon with a fetch keepalive fallback). Used to deliver the
+   * stopped event when the page is closed or reloaded mid-playback, where a
+   * normal CORS fetch would be dropped during unload. Returns true when the
+   * event was handed off to a transport.
+   */
+  public stoppedViaBeacon(data: TStoppedEvent): boolean {
+    if (!this.ensureReporter()) return false;
+    return this.analyticsReporter.sendBeacon(data);
+  }
+
   public destroy() {
     // Cascade destroy to the reporter so any in-flight init is aborted
     // and queued events are discarded rather than flushed.
