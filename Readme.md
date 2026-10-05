@@ -48,6 +48,29 @@ try {
 }
 ```
 
+#### Non-blocking `init()` and autoplay
+
+`load()` does **not** have to wait for `init()` to resolve. You may call `load()`
+immediately after `init()` starts (without awaiting it) — any events produced
+before the handshake completes are queued and flushed, in order, once the session
+is established:
+
+```js
+const analytics = new PlayerAnalyticsConnector("https://your-eventsink-url.io");
+
+// Start the handshake but don't await it...
+analytics.init({ sessionId: "generated-unique-uuid-session-id" });
+// ...attach the player right away so no early events are missed.
+analytics.load(videoElement);
+```
+
+This matters for **autoplay**: if the video starts playing while `init()` is still
+in flight, the `playing` event fires before the SDK's listeners are attached. To
+avoid losing it, `load()` inspects the element and, if it is already playing,
+emits a `playing` event itself and starts the heartbeat (queued/deferred until the
+handshake completes). Attaching with `load()` as early as possible ensures the
+`playing` event and heartbeats are captured even for autoplaying content.
+
 Due to bitrate changes not being reported, and errors not being reported in any descriptive way, there is a possibility to do separate calls for these events - which you may trigger based on your video player of choice following these examples.
 
 ```js
@@ -164,7 +187,7 @@ When you call `analytics.load(videoElement)` on `PlayerAnalyticsConnector`, the 
 |----------------|------------|
 | Media element load | `loading` (sent on `load()`) |
 | First playable state | `loaded` |
-| `playing` | `playing` (also starts the heartbeat) |
+| `playing` (or already playing at `load()`) | `playing` (also starts the heartbeat) |
 | `pause` | `paused` |
 | `seeking` | `seeking` |
 | `seeked` | `seeked` |

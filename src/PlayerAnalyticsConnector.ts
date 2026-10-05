@@ -100,6 +100,33 @@ export class PlayerAnalyticsConnector {
     });
     this.initiateVideoEventFilter();
     this.registerUnloadListeners();
+
+    // If the element is already playing by the time load() is called (e.g.
+    // autoplay started during a slow init() handshake, before listeners were
+    // attached), the media-event-filter won't emit a fresh PLAYING for the
+    // DOM "playing" event that already fired. Emit it ourselves and start the
+    // heartbeat so the session isn't lost. While init() is still in-flight the
+    // event is queued by the Reporter and the heartbeat start is deferred via
+    // pendingHeartbeatStart, flushing once the handshake completes.
+    if (this.isPlayerAlreadyPlaying()) {
+      this.playerAnalytics.playing({
+        event: "playing",
+        ...this.playbackState(),
+      });
+      this.startInterval();
+    }
+  }
+
+  private isPlayerAlreadyPlaying(): boolean {
+    // HAVE_FUTURE_DATA (readyState 3) mirrors the media-event-filter's own
+    // "ready" threshold. Use the numeric literal rather than
+    // HTMLMediaElement.HAVE_FUTURE_DATA so this works in non-DOM test envs.
+    return !!(
+      this.player &&
+      !this.player.paused &&
+      !this.player.ended &&
+      this.player.readyState >= 3
+    );
   }
 
   private initiateVideoEventFilter() {

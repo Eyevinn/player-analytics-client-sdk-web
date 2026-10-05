@@ -987,6 +987,126 @@ describe("PlayerAnalyticsConnector", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it("should send playing and start heartbeats for autoplay that started during a slow init() handshake", async () => {
+      // init() resolves slowly. Autoplay begins during the handshake, so the
+      // DOM "playing" event fires before the media-event-filter is attached and
+      // is never re-emitted. load() must detect the already-playing element,
+      // emit a queued 'playing', and arrange for heartbeats to start once init
+      // resolves.
+      jasmine.clock().install();
+      try {
+        let resolveInit!: (value: unknown) => void;
+        const pendingInit = new Promise((resolve) => {
+          resolveInit = resolve;
+        });
+        mockFetch.and.returnValue(pendingInit);
+
+        const connector = new PlayerAnalyticsConnector(
+          "https://example.com/analytics"
+        );
+        const initPromise = connector.init({
+          sessionId: "test-session",
+          heartbeatInterval: 5000,
+        });
+
+        // Element already playing by the time load() is called.
+        const playingElement = {
+          ...mockVideoElement,
+          paused: false,
+          ended: false,
+          readyState: 4,
+          currentTime: 2,
+          duration: 100,
+        };
+
+        mockFetch.calls.reset();
+        connector.load(playingElement);
+
+        // Events are queued until the handshake completes.
+        expect(mockFetch).not.toHaveBeenCalled();
+
+        resolveInit({
+          ok: true,
+          json: () => Promise.resolve({ sessionId: "test-session" }),
+          statusText: "OK",
+        });
+
+        await initPromise;
+        await flushMicrotasks();
+
+        // The queued 'loading' and 'playing' events must both reach the wire.
+        const events = mockFetch.calls
+          .all()
+          .map((c) => JSON.parse(c.args[1].body).event);
+        expect(events).toContain("loading");
+        expect(events).toContain("playing");
+
+        // Heartbeats must now be running (deferred start fired on init resolve).
+        mockFetch.calls.reset();
+        jasmine.clock().tick(5000);
+        const heartbeatEvents = mockFetch.calls
+          .all()
+          .map((c) => JSON.parse(c.args[1].body).event);
+        expect(heartbeatEvents).toContain("heartbeat");
+
+        (connector as unknown as ConnectorInternals).stopInterval();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+
+    it("should send playing immediately when element is already playing and init already resolved", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      const playingElement = {
+        ...mockVideoElement,
+        paused: false,
+        ended: false,
+        readyState: 4,
+      };
+
+      mockFetch.calls.reset();
+      connector.load(playingElement);
+
+      const events = mockFetch.calls
+        .all()
+        .map((c) => JSON.parse(c.args[1].body).event);
+      expect(events).toContain("loading");
+      expect(events).toContain("playing");
+
+      (connector as unknown as ConnectorInternals).stopInterval();
+    });
+
+    it("should NOT emit a playing event on load() when the element is paused", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      await flushMicrotasks();
+
+      const pausedElement = {
+        ...mockVideoElement,
+        paused: true,
+        ended: false,
+        readyState: 4,
+      };
+
+      mockFetch.calls.reset();
+      connector.load(pausedElement);
+
+      const events = mockFetch.calls
+        .all()
+        .map((c) => JSON.parse(c.args[1].body).event);
+      expect(events).not.toContain("playing");
+    });
+
     it("should reset pendingHeartbeatStart on init failure (no stale flag for retry)", async () => {
       // First init: PLAYING fires before init completes (sets pendingHeartbeatStart),
       // then init fails. The flag must be cleared so a retry doesn't fire heartbeats
