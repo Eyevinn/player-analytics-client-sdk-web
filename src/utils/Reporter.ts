@@ -201,12 +201,82 @@ export class Reporter {
     }
   }
 
-  private dispatch(data: TPlayerAnalyticsEvent): Promise<void> {
-    const payload = {
+  private buildPayload(data: TPlayerAnalyticsEvent) {
+    return {
       ...data,
       sessionId: this.sessionId,
       shardId: this.shardId,
     };
+  }
+
+  /**
+   * Deliver an event using a transport that survives page unload (tab close
+   * or reload).
+   *
+   * Uses `navigator.sendBeacon` with a `text/plain` JSON body. A plain-text
+   * body with no `X-EPAS-*` headers is a CORS "simple request", so the browser
+   * does not issue a preflight — the preflight is what gets dropped while the
+   * page is unloading, losing the event (notably the `stopped` event). The
+   * eventsink reads the event from the JSON body (`body.event`), not from
+   * headers, so the beacon is accepted.
+   *
+   * Falls back to `fetch(..., { keepalive: true })` when `sendBeacon` is
+   * unavailable or refuses the payload. Returns true when the event was handed
+   * off to a transport.
+   */
+  public sendBeacon(data: TPlayerAnalyticsEvent): boolean {
+    if (this.state === "destroyed") {
+      return false;
+    }
+
+    const payload = this.buildPayload(data);
+
+    if (this.debug) {
+      console.log("[AnalyticsReporter] Send beacon payload:", payload);
+      return true;
+    }
+
+    const body = JSON.stringify(payload);
+
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.sendBeacon === "function"
+    ) {
+      try {
+        const blob = new Blob([body], { type: "text/plain; charset=utf-8" });
+        if (navigator.sendBeacon(this.eventsinkUrl, blob)) {
+          return true;
+        }
+      } catch {
+        // Fall through to the keepalive fetch fallback below.
+      }
+    }
+
+    if (typeof fetch === "function") {
+      try {
+        fetch(`${this.eventsinkUrl}`, {
+          method: "POST",
+          mode: "cors",
+          cache: "no-cache",
+          keepalive: true,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+          },
+          body,
+        }).catch(() => {
+          // Best-effort during unload — nothing actionable to do on failure.
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  private dispatch(data: TPlayerAnalyticsEvent): Promise<void> {
+    const payload = this.buildPayload(data);
     if (this.debug) {
       console.log("[AnalyticsReporter] Send payload:", payload);
       return Promise.resolve();

@@ -194,8 +194,17 @@ When you call `analytics.load(videoElement)` on `PlayerAnalyticsConnector`, the 
 | Buffer stall | `buffering` |
 | Buffer recovery | `buffered` |
 | `ended` | `stopped` (`reason: "ended"`) |
+| Page close / reload (`pagehide`, `visibilitychange` → hidden) | `stopped` (`reason: "aborted"`) |
 
 `bitrate_changed`, `error`, `warning`, `metadata`, and manual `stopped` (`reason: "aborted"`) are **not** auto-detected — call the corresponding `report*` methods when you have the data. A `heartbeat` event is sent every `heartbeatInterval` ms while the player is in the `playing` state (see [Init Parameters](#init-parameters) below).
+
+### Unload-time delivery (page close / reload)
+
+When the page is closed or reloaded mid-session, the SDK delivers the final `stopped` event (`reason: "aborted"`) over [`navigator.sendBeacon`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon) instead of a normal fetch. The beacon is sent as a `text/plain` JSON body with **no `X-EPAS-*` headers**, which keeps it a CORS "simple request" so the browser does not issue a preflight — a preflight is dropped while the page unloads, which is why the `stopped` event was previously lost. The eventsink reads the event from the JSON body (`body.event`), so this is a fully supported way to send unload-time events.
+
+Where `navigator.sendBeacon` is unavailable, the SDK falls back to `fetch(..., { keepalive: true })` with the same `text/plain` JSON body.
+
+The unload listeners are attached automatically on `load()` and removed on `deinit()` / `destroy()`. The `stopped` event is only sent once per session, so an explicit `reportStop()`, a `reportError()`, or an `ended` event already reported for the session suppresses the unload beacon.
 
 ### Constructor Parameters
 

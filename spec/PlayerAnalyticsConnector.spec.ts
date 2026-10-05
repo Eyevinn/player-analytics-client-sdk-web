@@ -33,6 +33,169 @@ describe("PlayerAnalyticsConnector", () => {
     globalThis.fetch = originalFetch;
   });
 
+  describe("page unload (stopped via beacon)", () => {
+    let windowListeners: Record<string, (...args: any[]) => void>;
+    let documentListeners: Record<string, (...args: any[]) => void>;
+    let sendBeaconSpy: jasmine.Spy;
+    let navigatorDescriptor: PropertyDescriptor | undefined;
+    let docVisibility: string;
+
+    beforeEach(() => {
+      windowListeners = {};
+      documentListeners = {};
+      docVisibility = "visible";
+
+      (globalThis as any).window = {
+        addEventListener: (type: string, cb: (...args: any[]) => void) => {
+          windowListeners[type] = cb;
+        },
+        removeEventListener: (type: string) => {
+          delete windowListeners[type];
+        },
+      };
+      (globalThis as any).document = {
+        addEventListener: (type: string, cb: (...args: any[]) => void) => {
+          documentListeners[type] = cb;
+        },
+        removeEventListener: (type: string) => {
+          delete documentListeners[type];
+        },
+        get visibilityState() {
+          return docVisibility;
+        },
+      };
+
+      sendBeaconSpy = jasmine.createSpy("sendBeacon").and.returnValue(true);
+      navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator"
+      );
+      Object.defineProperty(globalThis, "navigator", {
+        value: { sendBeacon: sendBeaconSpy },
+        configurable: true,
+        writable: true,
+      });
+    });
+
+    afterEach(() => {
+      delete (globalThis as any).window;
+      delete (globalThis as any).document;
+      if (navigatorDescriptor) {
+        Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+      } else {
+        delete (globalThis as any).navigator;
+      }
+    });
+
+    async function readBeaconBody(): Promise<any> {
+      const blob = sendBeaconSpy.calls.mostRecent().args[1] as Blob;
+      return JSON.parse(await blob.text());
+    }
+
+    it("registers pagehide and visibilitychange listeners on load()", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      expect(typeof windowListeners["pagehide"]).toBe("function");
+      expect(typeof documentListeners["visibilitychange"]).toBe("function");
+    });
+
+    it("sends a stopped beacon (reason aborted) on pagehide", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      mockVideoElement.currentTime = 42.5;
+      mockVideoElement.duration = 120;
+      connector.load(mockVideoElement);
+      mockFetch.calls.reset();
+
+      windowListeners["pagehide"]();
+
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+      const body = await readBeaconBody();
+      expect(body.event).toBe("stopped");
+      expect(body.payload.reason).toBe("aborted");
+      // Server init response's sessionId is authoritative
+      expect(body.sessionId).toBe("test-session-id");
+      expect(body.playhead).toBe(42.5);
+    });
+
+    it("sends a stopped beacon on visibilitychange when hidden", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      docVisibility = "hidden";
+      documentListeners["visibilitychange"]();
+
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+      const body = await readBeaconBody();
+      expect(body.event).toBe("stopped");
+    });
+
+    it("does not send on visibilitychange while still visible", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      docVisibility = "visible";
+      documentListeners["visibilitychange"]();
+
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+    });
+
+    it("sends the stopped beacon only once per session", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      windowListeners["pagehide"]();
+      docVisibility = "hidden";
+      documentListeners["visibilitychange"]();
+      windowListeners["pagehide"]();
+
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not send an unload beacon after reportStop already stopped the session", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      connector.reportStop();
+      mockFetch.calls.reset();
+
+      windowListeners["pagehide"]();
+
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+    });
+
+    it("removes unload listeners on destroy()", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      connector.destroy();
+
+      expect(windowListeners["pagehide"]).toBeUndefined();
+      expect(documentListeners["visibilitychange"]).toBeUndefined();
+    });
+  });
+
   describe("init()", () => {
     it("should initialize analytics reporter and set analyticsInitiated to true", async () => {
       const connector = new PlayerAnalyticsConnector(

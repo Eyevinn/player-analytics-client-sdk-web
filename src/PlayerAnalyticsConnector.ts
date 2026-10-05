@@ -38,6 +38,12 @@ export class PlayerAnalyticsConnector {
   private heartbeatIntervalTimer: ReturnType<typeof setInterval>;
   private pendingHeartbeatStart = false;
 
+  // Tracks whether a stopped event has already been reported for the current
+  // session, so the page-unload path does not emit a duplicate after an
+  // `ended`, reportStop(), or reportError() has already stopped the session.
+  private stoppedReported = false;
+  private unloadListenersRegistered = false;
+
   constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.eventsinkUrl = eventsinkUrl;
     this.playerAnalytics = new PlayerAnalytics(
@@ -50,6 +56,7 @@ export class PlayerAnalyticsConnector {
   public async init(options: IPlayerAnalyticsConnectorInitOptions) {
     this.sessionId = options.sessionId;
     this.initCalled = true;
+    this.stoppedReported = false;
     const currentGeneration = ++this.initGeneration;
 
     const initPromise = this.playerAnalytics.initiateAnalyticsReporter({
@@ -92,6 +99,7 @@ export class PlayerAnalyticsConnector {
       ...this.playbackState(),
     });
     this.initiateVideoEventFilter();
+    this.registerUnloadListeners();
 
     // If the element is already playing by the time load() is called (e.g.
     // autoplay started during a slow init() handshake, before listeners were
@@ -155,6 +163,7 @@ export class PlayerAnalyticsConnector {
           case FilteredMediaEvent.ENDED:
             eventType = "stopped";
             extraData["reason"] = "ended";
+            this.stoppedReported = true;
             this.stopInterval();
             break;
           default:
@@ -221,6 +230,7 @@ export class PlayerAnalyticsConnector {
       ...this.playbackState(),
       payload: { reason: "aborted" },
     });
+    this.stoppedReported = true;
     this.stopInterval();
   }
 
@@ -239,6 +249,7 @@ export class PlayerAnalyticsConnector {
       ...this.playbackState(),
       payload: { reason: "error" },
     });
+    this.stoppedReported = true;
     this.stopInterval();
   }
 
@@ -285,6 +296,81 @@ export class PlayerAnalyticsConnector {
     };
   }
 
+  private handlePageHide = () => {
+    this.flushStoppedOnUnload();
+  };
+
+  private handleVisibilityChange = () => {
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
+      this.flushStoppedOnUnload();
+    }
+  };
+
+  /**
+   * Deliver a stopped event when the page is being unloaded (tab closed or
+   * reloaded) mid-session. Listens on both `pagehide` and
+   * `visibilitychange` (hidden) because the browser drops the normal CORS
+   * fetch — which requires a preflight — during unload, losing the event. The
+   * stopped event goes out over the reporter's beacon transport instead, and
+   * only once per session (a later `ended`, reportStop(), or reportError()
+   * will already have reported stopped).
+   */
+  private flushStoppedOnUnload() {
+    if (!this.initCalled || this.stoppedReported || !this.player) {
+      return;
+    }
+    this.stoppedReported = true;
+    this.stopInterval();
+    this.playerAnalytics.stoppedViaBeacon({
+      event: "stopped",
+      ...this.playbackState(),
+      payload: { reason: "aborted" },
+    });
+  }
+
+  private registerUnloadListeners() {
+    if (this.unloadListenersRegistered) return;
+    if (
+      typeof window !== "undefined" &&
+      typeof window.addEventListener === "function"
+    ) {
+      window.addEventListener("pagehide", this.handlePageHide);
+    }
+    if (
+      typeof document !== "undefined" &&
+      typeof document.addEventListener === "function"
+    ) {
+      document.addEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange
+      );
+    }
+    this.unloadListenersRegistered = true;
+  }
+
+  private removeUnloadListeners() {
+    if (!this.unloadListenersRegistered) return;
+    if (
+      typeof window !== "undefined" &&
+      typeof window.removeEventListener === "function"
+    ) {
+      window.removeEventListener("pagehide", this.handlePageHide);
+    }
+    if (
+      typeof document !== "undefined" &&
+      typeof document.removeEventListener === "function"
+    ) {
+      document.removeEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange
+      );
+    }
+    this.unloadListenersRegistered = false;
+  }
+
   public deinit() {
     if (!this.initCalled) {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
@@ -296,6 +382,7 @@ export class PlayerAnalyticsConnector {
     // current one is safe even though deinit is meant to be reusable.
     this.playerAnalytics.destroy();
     this.stopInterval();
+    this.removeUnloadListeners();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
@@ -311,6 +398,7 @@ export class PlayerAnalyticsConnector {
     this.initGeneration++; // Invalidate any pending init callbacks
     this.stopInterval();
     this.playerAnalytics.destroy();
+    this.removeUnloadListeners();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
