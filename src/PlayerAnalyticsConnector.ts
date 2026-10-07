@@ -34,6 +34,15 @@ export class PlayerAnalyticsConnector {
   private videoEventFilter: TMediaEventFilter;
   private videoEventListener: unknown;
 
+  // Direct DOM fallback for terminal/seek events on an element that was already
+  // playing when load() ran (autoplay started during a slow init() handshake).
+  // The media-event-filter attaches in its "loading" state and, never having
+  // observed the initial playing/canplaythrough transitions, stays stuck there
+  // and suppresses ENDED/SEEKING/SEEKED. These listeners drive that path
+  // directly. They self-disable the moment the filter proves it is live (emits
+  // any event), so a seek is never reported twice across the two sources.
+  private autoplayFallbackActive = false;
+
   private heartbeatInterval: number;
   private heartbeatIntervalTimer: ReturnType<typeof setInterval>;
   private pendingHeartbeatStart = false;
@@ -114,6 +123,10 @@ export class PlayerAnalyticsConnector {
         ...this.playbackState(),
       });
       this.startInterval();
+      // The filter won't emit terminal/seek events for this already-playing
+      // element (see isPlayerAlreadyPlaying / initiateVideoEventFilter notes),
+      // so drive ended/seeking/seeked from the element's own DOM events.
+      this.attachAutoplayTerminalFallback();
     }
   }
 
@@ -135,6 +148,12 @@ export class PlayerAnalyticsConnector {
       mediaElement: this.player,
       mp4Mode: false,
       callback: (event: FilteredMediaEvent) => {
+        // The filter emitting anything means it has left its initial "loading"
+        // state and is now the authoritative source for terminal/seek events;
+        // retire the autoplay DOM fallback so a single seek/ended is not
+        // reported twice.
+        this.detachAutoplayTerminalFallback();
+
         let eventType: TEventType;
         const extraData = {};
         switch (event) {
@@ -161,6 +180,9 @@ export class PlayerAnalyticsConnector {
             eventType = "buffered";
             break;
           case FilteredMediaEvent.ENDED:
+            // Guard against a duplicate stopped(ended) if the autoplay fallback
+            // (or reportStop/reportError) already ended the session.
+            if (this.stoppedReported) return;
             eventType = "stopped";
             extraData["reason"] = "ended";
             this.stoppedReported = true;
@@ -169,23 +191,72 @@ export class PlayerAnalyticsConnector {
           default:
             break;
         }
-        try {
-          if (!this.initCalled) {
-            console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
-            return;
-          }
-          if (eventType) {
-            this.playerAnalytics[eventType == "paused" ? "pause" : eventType]({
-              event: eventType,
-              ...this.playbackState(),
-              ...(Object.keys(extraData).length > 0 && { payload: extraData }),
-            });
-          }
-        } catch (err) {
-          console.error(err);
-        }
+        this.sendFilteredEvent(eventType, extraData);
       },
     });
+  }
+
+  // Shared emit path for events sourced from the media-event-filter and from
+  // the autoplay DOM fallback, so both behave identically (init guard, the
+  // paused→pause method-name mapping, optional payload, error swallowing).
+  private sendFilteredEvent(
+    eventType: TEventType,
+    extraData: Record<string, unknown> = {}
+  ) {
+    try {
+      if (!this.initCalled) {
+        console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
+        return;
+      }
+      if (eventType) {
+        this.playerAnalytics[eventType == "paused" ? "pause" : eventType]({
+          event: eventType,
+          ...this.playbackState(),
+          ...(Object.keys(extraData).length > 0 && { payload: extraData }),
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  private handleAutoplayEnded = () => {
+    // Mirror the filter's ENDED branch: exactly one stopped(ended), stop
+    // heartbeats, and respect the stoppedReported guard so reportStop/
+    // reportError/unload can't produce a duplicate.
+    if (this.stoppedReported) return;
+    this.stoppedReported = true;
+    this.stopInterval();
+    this.sendFilteredEvent("stopped", { reason: "ended" });
+  };
+
+  private handleAutoplaySeeking = () => {
+    this.sendFilteredEvent("seeking");
+  };
+
+  private handleAutoplaySeeked = () => {
+    this.sendFilteredEvent("seeked");
+  };
+
+  private attachAutoplayTerminalFallback() {
+    if (this.autoplayFallbackActive) return;
+    if (!this.player || typeof this.player.addEventListener !== "function") {
+      return;
+    }
+    this.autoplayFallbackActive = true;
+    this.player.addEventListener("ended", this.handleAutoplayEnded);
+    this.player.addEventListener("seeking", this.handleAutoplaySeeking);
+    this.player.addEventListener("seeked", this.handleAutoplaySeeked);
+  }
+
+  private detachAutoplayTerminalFallback() {
+    if (!this.autoplayFallbackActive) return;
+    this.autoplayFallbackActive = false;
+    if (this.player && typeof this.player.removeEventListener === "function") {
+      this.player.removeEventListener("ended", this.handleAutoplayEnded);
+      this.player.removeEventListener("seeking", this.handleAutoplaySeeking);
+      this.player.removeEventListener("seeked", this.handleAutoplaySeeked);
+    }
   }
 
   private startInterval() {
@@ -383,6 +454,7 @@ export class PlayerAnalyticsConnector {
     this.playerAnalytics.destroy();
     this.stopInterval();
     this.removeUnloadListeners();
+    this.detachAutoplayTerminalFallback();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
@@ -399,6 +471,7 @@ export class PlayerAnalyticsConnector {
     this.stopInterval();
     this.playerAnalytics.destroy();
     this.removeUnloadListeners();
+    this.detachAutoplayTerminalFallback();
     this.heartbeatInterval = null;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
