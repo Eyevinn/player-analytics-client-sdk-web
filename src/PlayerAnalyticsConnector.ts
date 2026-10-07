@@ -371,23 +371,17 @@ export class PlayerAnalyticsConnector {
     this.flushStoppedOnUnload();
   };
 
-  private handleVisibilityChange = () => {
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "hidden"
-    ) {
-      this.flushStoppedOnUnload();
-    }
-  };
-
   /**
    * Deliver a stopped event when the page is being unloaded (tab closed or
-   * reloaded) mid-session. Listens on both `pagehide` and
-   * `visibilitychange` (hidden) because the browser drops the normal CORS
-   * fetch — which requires a preflight — during unload, losing the event. The
-   * stopped event goes out over the reporter's beacon transport instead, and
-   * only once per session (a later `ended`, reportStop(), or reportError()
-   * will already have reported stopped).
+   * reloaded) mid-session. Driven by `pagehide`, which fires on genuine
+   * discard (close/reload/navigate-away) but NOT on an ordinary tab switch —
+   * the browser drops the normal CORS fetch (it needs a preflight) during
+   * unload, losing the event, so the stopped event goes out over the
+   * reporter's beacon transport instead. It is sent only once per session (a
+   * later `ended`, reportStop(), or reportError() will already have reported
+   * stopped). `visibilitychange→hidden` is deliberately NOT used here: a tab
+   * switch / backgrounding is not an unload and must not end a still-playing
+   * session (see #44).
    */
   private flushStoppedOnUnload() {
     if (!this.initCalled || this.stoppedReported || !this.player) {
@@ -410,15 +404,6 @@ export class PlayerAnalyticsConnector {
     ) {
       window.addEventListener("pagehide", this.handlePageHide);
     }
-    if (
-      typeof document !== "undefined" &&
-      typeof document.addEventListener === "function"
-    ) {
-      document.addEventListener(
-        "visibilitychange",
-        this.handleVisibilityChange
-      );
-    }
     this.unloadListenersRegistered = true;
   }
 
@@ -429,15 +414,6 @@ export class PlayerAnalyticsConnector {
       typeof window.removeEventListener === "function"
     ) {
       window.removeEventListener("pagehide", this.handlePageHide);
-    }
-    if (
-      typeof document !== "undefined" &&
-      typeof document.removeEventListener === "function"
-    ) {
-      document.removeEventListener(
-        "visibilitychange",
-        this.handleVisibilityChange
-      );
     }
     this.unloadListenersRegistered = false;
   }
