@@ -1142,4 +1142,190 @@ describe("PlayerAnalyticsConnector", () => {
       expect(internals.pendingHeartbeatStart).toBe(false);
     });
   });
+
+  describe("autoplay terminal/seek fallback (already-playing attach)", () => {
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
+    // A video element whose add/removeEventListener actually register handlers,
+    // so a DOM "ended"/"seeking"/"seeked" can be dispatched in-test. Models the
+    // already-playing autoplay element the media-event-filter attaches to too
+    // late to observe.
+    function makePlayingElement(overrides: Record<string, any> = {}) {
+      const listeners: Record<string, Set<(...a: any[]) => void>> = {};
+      return {
+        currentTime: 2,
+        duration: 100,
+        paused: false,
+        ended: false,
+        readyState: 4,
+        addEventListener(type: string, cb: (...a: any[]) => void) {
+          (listeners[type] || (listeners[type] = new Set())).add(cb);
+        },
+        removeEventListener(type: string, cb: (...a: any[]) => void) {
+          listeners[type] && listeners[type].delete(cb);
+        },
+        __dispatch(type: string) {
+          listeners[type] && listeners[type].forEach((cb) => cb({}));
+        },
+        ...overrides,
+      } as any;
+    }
+
+    const bodies = () =>
+      mockFetch.calls.all().map((c: any) => JSON.parse(c.args[1].body));
+
+    it("reports exactly one stopped(ended) and stops heartbeats when an already-playing element ends", async () => {
+      jasmine.clock().install();
+      try {
+        const connector = new PlayerAnalyticsConnector(
+          "https://example.com/analytics"
+        );
+        await connector.init({
+          sessionId: "test-session",
+          heartbeatInterval: 5000,
+        });
+        await flushMicrotasks();
+
+        const el = makePlayingElement();
+        connector.load(el);
+
+        // Heartbeats are running for the autoplay session.
+        mockFetch.calls.reset();
+        jasmine.clock().tick(5000);
+        expect(bodies().map((b) => b.event)).toContain("heartbeat");
+
+        // End of media.
+        mockFetch.calls.reset();
+        el.__dispatch("ended");
+
+        const stopped = bodies().filter((b) => b.event === "stopped");
+        expect(stopped.length).toBe(1);
+        expect(stopped[0].payload.reason).toBe("ended");
+
+        // Heartbeats stop after ended.
+        mockFetch.calls.reset();
+        jasmine.clock().tick(5000);
+        expect(mockFetch).not.toHaveBeenCalled();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+
+    it("reports seeking and seeked for an already-playing element", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      const el = makePlayingElement();
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("seeking");
+      el.__dispatch("seeked");
+
+      const events = bodies().map((b) => b.event);
+      expect(events).toContain("seeking");
+      expect(events).toContain("seeked");
+
+      (connector as any).stopInterval();
+    });
+
+    it("does not emit a second stopped when the session was already stopped (reportStop)", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      const el = makePlayingElement();
+      connector.load(el);
+
+      connector.reportStop();
+      mockFetch.calls.reset();
+
+      el.__dispatch("ended");
+
+      expect(bodies().filter((b) => b.event === "stopped").length).toBe(0);
+    });
+
+    it("does not attach the fallback for a paused element", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      await flushMicrotasks();
+
+      const el = makePlayingElement({ paused: true });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("ended");
+
+      // No fallback => the DOM ended must not produce a stopped event.
+      expect(bodies().filter((b) => b.event === "stopped").length).toBe(0);
+      expect((connector as any).autoplayFallbackActive).toBe(false);
+    });
+
+    it("retires the DOM fallback once the media-event-filter goes live (seek reported once, not twice)", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      const el = makePlayingElement();
+      connector.load(el);
+      expect((connector as any).autoplayFallbackActive).toBe(true);
+
+      // Drive the real media-event-filter out of its initial "loading" state:
+      // a DOM "playing" makes it emit, so it becomes the authoritative source
+      // and the DOM fallback must retire. Both the filter and the fallback are
+      // registered for "seeking" on the element; retiring the fallback is what
+      // prevents the seek from being reported twice.
+      el.__dispatch("playing");
+      expect((connector as any).autoplayFallbackActive).toBe(false);
+
+      mockFetch.calls.reset();
+      el.__dispatch("seeking");
+      const seekingEvents = bodies().filter((b) => b.event === "seeking");
+      expect(seekingEvents.length).toBe(1);
+
+      (connector as any).stopInterval();
+    });
+
+    it("removes the fallback DOM listeners on destroy()", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      const el = makePlayingElement();
+      connector.load(el);
+      expect((connector as any).autoplayFallbackActive).toBe(true);
+
+      connector.destroy();
+      expect((connector as any).autoplayFallbackActive).toBe(false);
+
+      mockFetch.calls.reset();
+      el.__dispatch("ended");
+      expect(bodies().filter((b) => b.event === "stopped").length).toBe(0);
+    });
+  });
 });
