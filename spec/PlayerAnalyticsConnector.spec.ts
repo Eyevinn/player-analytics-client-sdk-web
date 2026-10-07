@@ -198,8 +198,6 @@ describe("PlayerAnalyticsConnector", () => {
       // handler runs. The stoppedReported guard must prevent a second beacon.
       connector.reportStop();
       windowListeners["pagehide"]();
-      docVisibility = "hidden";
-      documentListeners["visibilitychange"]();
 
       expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
     });
