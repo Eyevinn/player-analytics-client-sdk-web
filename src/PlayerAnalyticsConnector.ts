@@ -296,13 +296,25 @@ export class PlayerAnalyticsConnector {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
-    this.playerAnalytics.stopped({
+    // Already stopped this session (an `ended`, reportError(), or a prior
+    // unload beacon) — don't emit a duplicate stopped.
+    if (this.stoppedReported) {
+      return;
+    }
+    this.stoppedReported = true;
+    this.stopInterval();
+    // Deliver over the unload-safe beacon transport (sendBeacon / keepalive
+    // fetch), not the normal CORS fetch. Integrators call reportStop() from
+    // pagehide/unload handlers, where the browser drops the preflighted CORS
+    // fetch and the event is lost. Routing through the same beacon the SDK's
+    // own unload path uses means setting `stoppedReported` here lets
+    // flushStoppedOnUnload() short-circuit without losing the event, so
+    // exactly one stopped is delivered.
+    this.playerAnalytics.stoppedViaBeacon({
       event: "stopped",
       ...this.playbackState(),
       payload: { reason: "aborted" },
     });
-    this.stoppedReported = true;
-    this.stopInterval();
   }
 
   public reportError(error: TErrorEventPayload) {
