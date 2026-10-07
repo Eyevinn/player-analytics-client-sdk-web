@@ -92,15 +92,17 @@ describe("PlayerAnalyticsConnector", () => {
       return JSON.parse(await blob.text());
     }
 
-    it("registers pagehide and visibilitychange listeners on load()", async () => {
+    it("registers the pagehide listener (and NOT visibilitychange) on load()", async () => {
       const connector = new PlayerAnalyticsConnector(
         "https://example.com/analytics"
       );
       await connector.init({ sessionId: "test-session" });
       connector.load(mockVideoElement);
 
+      // pagehide is the unload mechanism; a visibilitychange (tab switch) must
+      // NOT be wired up to end the session (see #44).
       expect(typeof windowListeners["pagehide"]).toBe("function");
-      expect(typeof documentListeners["visibilitychange"]).toBe("function");
+      expect(documentListeners["visibilitychange"]).toBeUndefined();
     });
 
     it("sends a stopped beacon (reason aborted) on pagehide", async () => {
@@ -124,47 +126,43 @@ describe("PlayerAnalyticsConnector", () => {
       expect(body.playhead).toBe(42.5);
     });
 
-    it("sends a stopped beacon on visibilitychange when hidden", async () => {
+    it("does NOT end the session when the page becomes hidden (tab switch)", async () => {
       const connector = new PlayerAnalyticsConnector(
         "https://example.com/analytics"
       );
       await connector.init({ sessionId: "test-session" });
       connector.load(mockVideoElement);
 
+      // Simulate a tab switch / backgrounding: the page goes hidden, but this
+      // is not an unload. No visibilitychange listener is wired, so even if the
+      // page fires one, nothing ends the session.
       docVisibility = "hidden";
-      documentListeners["visibilitychange"]();
+      expect(documentListeners["visibilitychange"]).toBeUndefined();
+
+      // No stopped beacon, and the one-shot guard is untouched so a later real
+      // end still produces exactly one stopped.
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+      expect((connector as any).stoppedReported).toBe(false);
+    });
+
+    it("still delivers exactly one stopped beacon on a real unload (pagehide) after a hide", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      // Page hidden first (tab switch) — must not consume the one-shot...
+      docVisibility = "hidden";
+      // ...then a genuine unload (close/reload/navigate-away).
+      docVisibility = "visible";
+      windowListeners["pagehide"]();
+      windowListeners["pagehide"]();
 
       expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
       const body = await readBeaconBody();
       expect(body.event).toBe("stopped");
-    });
-
-    it("does not send on visibilitychange while still visible", async () => {
-      const connector = new PlayerAnalyticsConnector(
-        "https://example.com/analytics"
-      );
-      await connector.init({ sessionId: "test-session" });
-      connector.load(mockVideoElement);
-
-      docVisibility = "visible";
-      documentListeners["visibilitychange"]();
-
-      expect(sendBeaconSpy).not.toHaveBeenCalled();
-    });
-
-    it("sends the stopped beacon only once per session", async () => {
-      const connector = new PlayerAnalyticsConnector(
-        "https://example.com/analytics"
-      );
-      await connector.init({ sessionId: "test-session" });
-      connector.load(mockVideoElement);
-
-      windowListeners["pagehide"]();
-      docVisibility = "hidden";
-      documentListeners["visibilitychange"]();
-      windowListeners["pagehide"]();
-
-      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+      expect(body.payload.reason).toBe("aborted");
     });
 
     it("does not send an unload beacon after reportStop already stopped the session", async () => {
@@ -192,7 +190,96 @@ describe("PlayerAnalyticsConnector", () => {
       connector.destroy();
 
       expect(windowListeners["pagehide"]).toBeUndefined();
+    });
+  });
+
+  describe("hidden page does not end a still-playing session (#44)", () => {
+    let documentListeners: Record<string, (...args: any[]) => void>;
+    let sendBeaconSpy: jasmine.Spy;
+    let navigatorDescriptor: PropertyDescriptor | undefined;
+    let docVisibility: string;
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      documentListeners = {};
+      docVisibility = "visible";
+
+      (globalThis as any).window = {
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+      (globalThis as any).document = {
+        addEventListener: (type: string, cb: (...args: any[]) => void) => {
+          documentListeners[type] = cb;
+        },
+        removeEventListener: (type: string) => {
+          delete documentListeners[type];
+        },
+        get visibilityState() {
+          return docVisibility;
+        },
+      };
+
+      sendBeaconSpy = jasmine.createSpy("sendBeacon").and.returnValue(true);
+      navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator"
+      );
+      Object.defineProperty(globalThis, "navigator", {
+        value: { sendBeacon: sendBeaconSpy },
+        configurable: true,
+        writable: true,
+      });
+    });
+
+    afterEach(() => {
+      jasmine.clock().uninstall();
+      delete (globalThis as any).window;
+      delete (globalThis as any).document;
+      if (navigatorDescriptor) {
+        Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+      } else {
+        delete (globalThis as any).navigator;
+      }
+    });
+
+    it("keeps heartbeats running while hidden and after returning visible, with no stopped", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      connector.load(mockVideoElement);
+      (connector as any).startInterval();
+
+      // Page goes hidden (tab switch). No visibilitychange handler is wired, so
+      // nothing stops the interval.
+      docVisibility = "hidden";
       expect(documentListeners["visibilitychange"]).toBeUndefined();
+
+      mockFetch.calls.reset();
+      jasmine.clock().tick(5000);
+      let events = mockFetch.calls
+        .all()
+        .map((c) => JSON.parse(c.args[1].body).event);
+      // Heartbeat still fires while hidden; no stopped is emitted.
+      expect(events).toContain("heartbeat");
+      expect(events).not.toContain("stopped");
+
+      // Back to visible: heartbeats keep going.
+      docVisibility = "visible";
+      mockFetch.calls.reset();
+      jasmine.clock().tick(5000);
+      events = mockFetch.calls
+        .all()
+        .map((c) => JSON.parse(c.args[1].body).event);
+      expect(events).toContain("heartbeat");
+
+      // The session was never ended by the hide.
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+      expect((connector as any).stoppedReported).toBe(false);
     });
   });
 
