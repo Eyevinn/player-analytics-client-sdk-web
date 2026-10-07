@@ -167,6 +167,45 @@ describe("PlayerAnalyticsConnector", () => {
       expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
     });
 
+    it("delivers integrator reportStop() over the unload-safe beacon", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      mockVideoElement.currentTime = 12.5;
+      connector.load(mockVideoElement);
+      mockFetch.calls.reset();
+
+      // Simulates an integrator calling reportStop() from a pagehide/unload
+      // handler: it must go out over the beacon (not the normal CORS fetch
+      // the browser drops during unload).
+      connector.reportStop();
+
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalled();
+      const body = await readBeaconBody();
+      expect(body.event).toBe("stopped");
+      expect(body.payload.reason).toBe("aborted");
+      expect(body.playhead).toBe(12.5);
+    });
+
+    it("delivers exactly one stopped when reportStop() and the SDK unload path both run", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      // Integrator's unload reportStop() fires, then the SDK's own pagehide
+      // handler runs. The stoppedReported guard must prevent a second beacon.
+      connector.reportStop();
+      windowListeners["pagehide"]();
+      docVisibility = "hidden";
+      documentListeners["visibilitychange"]();
+
+      expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("does not send an unload beacon after reportStop already stopped the session", async () => {
       const connector = new PlayerAnalyticsConnector(
         "https://example.com/analytics"
@@ -175,11 +214,30 @@ describe("PlayerAnalyticsConnector", () => {
       connector.load(mockVideoElement);
 
       connector.reportStop();
+      sendBeaconSpy.calls.reset();
       mockFetch.calls.reset();
 
       windowListeners["pagehide"]();
 
       expect(sendBeaconSpy).not.toHaveBeenCalled();
+    });
+
+    it("reportStop() respects the stoppedReported guard set by ended (no duplicate)", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      connector.load(mockVideoElement);
+
+      // ENDED emits the terminal stopped and sets the guard.
+      (connector as any).stoppedReported = true;
+      sendBeaconSpy.calls.reset();
+      mockFetch.calls.reset();
+
+      connector.reportStop();
+
+      expect(sendBeaconSpy).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("removes unload listeners on destroy()", async () => {
