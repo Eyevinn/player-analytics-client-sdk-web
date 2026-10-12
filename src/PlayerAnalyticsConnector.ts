@@ -53,6 +53,14 @@ export class PlayerAnalyticsConnector {
   private stoppedReported = false;
   private unloadListenersRegistered = false;
 
+  // Last playhead observed while the element was NOT seeking. EPAS requires the
+  // `seeking` event to carry the PRE-seek playhead, but by the time the DOM
+  // "seeking" event fires `player.currentTime` already holds the seek TARGET.
+  // We therefore track the most recent non-seeking currentTime and report THAT
+  // for `seeking`. -1 is the "nothing valid recorded yet" sentinel, matching the
+  // one playbackState() uses.
+  private lastPlayhead = -1;
+
   constructor(eventsinkUrl: string, debug?: boolean, onError?: TOnSendError) {
     this.eventsinkUrl = eventsinkUrl;
     this.playerAnalytics = new PlayerAnalytics(
@@ -103,6 +111,8 @@ export class PlayerAnalyticsConnector {
 
   public load(player: HTMLVideoElement) {
     this.player = player;
+    // Start a fresh session with no carried-over pre-seek playhead.
+    this.lastPlayhead = -1;
     this.playerAnalytics.loading({
       event: "loading",
       ...this.playbackState(),
@@ -188,6 +198,12 @@ export class PlayerAnalyticsConnector {
             this.stoppedReported = true;
             this.stopInterval();
             break;
+          case FilteredMediaEvent.TIME_UPDATE:
+            // Not an EPAS event of its own, but record the current (pre-seek)
+            // playhead so a later `seeking` can report where the user seeked
+            // FROM rather than the target (see lastPlayhead).
+            this.recordPlayhead();
+            break;
           default:
             break;
         }
@@ -209,9 +225,16 @@ export class PlayerAnalyticsConnector {
         return;
       }
       if (eventType) {
+        const state = this.playbackState();
+        // EPAS: the `seeking` event MUST carry the current (pre-seek) playhead,
+        // NOT the target playhead that currentTime already holds once seeking
+        // has begun. Every other event keeps the live currentTime.
+        if (eventType === "seeking") {
+          state.playhead = this.lastPlayhead;
+        }
         this.playerAnalytics[eventType == "paused" ? "pause" : eventType]({
           event: eventType,
-          ...this.playbackState(),
+          ...state,
           ...(Object.keys(extraData).length > 0 && { payload: extraData }),
         });
       }
@@ -238,6 +261,13 @@ export class PlayerAnalyticsConnector {
     this.sendFilteredEvent("seeked");
   };
 
+  private handleAutoplayTimeupdate = () => {
+    // The media-event-filter may not forward TIME_UPDATE while the fallback is
+    // active, so track the pre-seek playhead directly from the element's own
+    // "timeupdate" so handleAutoplaySeeking can report it.
+    this.recordPlayhead();
+  };
+
   private attachAutoplayTerminalFallback() {
     if (this.autoplayFallbackActive) return;
     if (!this.player || typeof this.player.addEventListener !== "function") {
@@ -247,6 +277,7 @@ export class PlayerAnalyticsConnector {
     this.player.addEventListener("ended", this.handleAutoplayEnded);
     this.player.addEventListener("seeking", this.handleAutoplaySeeking);
     this.player.addEventListener("seeked", this.handleAutoplaySeeked);
+    this.player.addEventListener("timeupdate", this.handleAutoplayTimeupdate);
   }
 
   private detachAutoplayTerminalFallback() {
@@ -256,6 +287,10 @@ export class PlayerAnalyticsConnector {
       this.player.removeEventListener("ended", this.handleAutoplayEnded);
       this.player.removeEventListener("seeking", this.handleAutoplaySeeking);
       this.player.removeEventListener("seeked", this.handleAutoplaySeeked);
+      this.player.removeEventListener(
+        "timeupdate",
+        this.handleAutoplayTimeupdate
+      );
     }
   }
 
@@ -360,7 +395,23 @@ export class PlayerAnalyticsConnector {
     });
   }
 
+  // Capture the current playhead as the last known PRE-seek position, but ONLY
+  // while the element is not seeking (once a seek starts, currentTime is the
+  // target, not where the user seeked FROM). Uses the SAME validity rule as
+  // playbackState() — a valid currentTime with NO dependency on duration (do
+  // not reintroduce the duration coupling fixed in #34/#35).
+  private recordPlayhead() {
+    if (!this.player || this.player.seeking) return;
+    const currentTime = this.player.currentTime;
+    if (currentTime != null && currentTime >= 0) {
+      this.lastPlayhead = currentTime;
+    }
+  }
+
   private playbackState(): TBaseEvent {
+    // Recording here keeps lastPlayhead current for every non-seeking event the
+    // connector emits, so a subsequent `seeking` reports the pre-seek playhead.
+    this.recordPlayhead();
     const duration =
       this.player?.duration &&
       this.player?.duration !== Infinity &&
@@ -444,6 +495,7 @@ export class PlayerAnalyticsConnector {
     this.removeUnloadListeners();
     this.detachAutoplayTerminalFallback();
     this.heartbeatInterval = null;
+    this.lastPlayhead = -1;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
     this.analyticsInitiated = false;
@@ -461,6 +513,7 @@ export class PlayerAnalyticsConnector {
     this.removeUnloadListeners();
     this.detachAutoplayTerminalFallback();
     this.heartbeatInterval = null;
+    this.lastPlayhead = -1;
     this.videoEventFilter && this.videoEventFilter.teardown();
     this.videoEventFilter = null;
     this.analyticsInitiated = false;

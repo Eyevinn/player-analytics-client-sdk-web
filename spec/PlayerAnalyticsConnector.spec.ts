@@ -1471,4 +1471,230 @@ describe("PlayerAnalyticsConnector", () => {
       expect(bodies().filter((b) => b.event === "stopped").length).toBe(0);
     });
   });
+
+  describe("seeking reports the pre-seek playhead, not the target (#50)", () => {
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
+    // An already-playing element whose add/removeEventListener register handlers
+    // so DOM "timeupdate"/"seeking"/"seeked" can be dispatched in-test, and whose
+    // `seeking` flag is settable to model currentTime holding the seek TARGET once
+    // a seek has begun. Drives the autoplay DOM fallback path.
+    function makePlayingElement(overrides: Record<string, any> = {}) {
+      const listeners: Record<string, Set<(...a: any[]) => void>> = {};
+      return {
+        currentTime: 0,
+        duration: 100,
+        paused: false,
+        ended: false,
+        readyState: 4,
+        seeking: false,
+        addEventListener(type: string, cb: (...a: any[]) => void) {
+          (listeners[type] || (listeners[type] = new Set())).add(cb);
+        },
+        removeEventListener(type: string, cb: (...a: any[]) => void) {
+          listeners[type] && listeners[type].delete(cb);
+        },
+        __dispatch(type: string) {
+          listeners[type] && listeners[type].forEach((cb) => cb({}));
+        },
+        ...overrides,
+      } as any;
+    }
+
+    const bodies = () =>
+      mockFetch.calls.all().map((c: any) => JSON.parse(c.args[1].body));
+    const seekingBodies = () => bodies().filter((b) => b.event === "seeking");
+    const seekedBodies = () => bodies().filter((b) => b.event === "seeked");
+
+    async function newConnector() {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+      return connector;
+    }
+
+    it("reports the pre-seek playhead for the seeking event (playhead 30, not target 10)", async () => {
+      const connector = await newConnector();
+      const el = makePlayingElement({ currentTime: 30 });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("timeupdate"); // records 30 while not seeking
+      // Seek begins: currentTime now holds the TARGET.
+      el.currentTime = 10;
+      el.seeking = true;
+      el.__dispatch("seeking");
+
+      expect(seekingBodies().length).toBe(1);
+      expect(seekingBodies()[0].playhead).toBe(30);
+
+      (connector as any).stopInterval();
+    });
+
+    it("reports the seek target as playhead for the seeked event (playhead 10)", async () => {
+      const connector = await newConnector();
+      const el = makePlayingElement({ currentTime: 30 });
+      connector.load(el);
+
+      el.__dispatch("timeupdate");
+      el.currentTime = 10;
+      el.seeking = true;
+      el.__dispatch("seeking");
+
+      // Seek completes: currentTime is the new (target) position and seeking ends.
+      mockFetch.calls.reset();
+      el.seeking = false;
+      el.__dispatch("seeked");
+
+      expect(seekedBodies().length).toBe(1);
+      expect(seekedBodies()[0].playhead).toBe(10);
+
+      (connector as any).stopInterval();
+    });
+
+    it("keeps the pre-first-seek playhead across consecutive seeks (both seeking playhead 30)", async () => {
+      const connector = await newConnector();
+      const el = makePlayingElement({ currentTime: 30 });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("timeupdate"); // records 30
+      // First seek to 50.
+      el.currentTime = 50;
+      el.seeking = true;
+      el.__dispatch("seeking");
+      // A timeupdate may fire while still seeking — must NOT be recorded.
+      el.__dispatch("timeupdate");
+      // Second seek (target changes to 40) before the first settled.
+      el.currentTime = 40;
+      el.__dispatch("seeking");
+
+      const seeks = seekingBodies();
+      expect(seeks.length).toBe(2);
+      expect(seeks[0].playhead).toBe(30);
+      expect(seeks[1].playhead).toBe(30);
+
+      (connector as any).stopInterval();
+    });
+
+    it("uses the last recorded non-seeking value when seeking before any timeupdate (playhead 0, not target)", async () => {
+      const connector = await newConnector();
+      // currentTime 0 at load → the loading/playing events record 0.
+      const el = makePlayingElement({ currentTime: 0 });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.currentTime = 25; // seek target
+      el.seeking = true;
+      el.__dispatch("seeking");
+
+      expect(seekingBodies()[0].playhead).toBe(0);
+
+      (connector as any).stopInterval();
+    });
+
+    it("reports -1 for a seek when nothing was ever recorded (never the target)", async () => {
+      const connector = await newConnector();
+      // Element is already seeking at load(), so no non-seeking playhead is ever
+      // recorded for this session.
+      const el = makePlayingElement({ currentTime: 25, seeking: true });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("seeking");
+
+      expect(seekingBodies()[0].playhead).toBe(-1);
+
+      (connector as any).stopInterval();
+    });
+
+    it("reports the tracked playhead (not -1) for live/duration-unknown content", async () => {
+      const connector = await newConnector();
+      const el = makePlayingElement({
+        currentTime: 1234.5,
+        duration: Infinity,
+      });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("timeupdate"); // records 1234.5 even with unknown duration
+      el.currentTime = 2000;
+      el.seeking = true;
+      el.__dispatch("seeking");
+
+      const seek = seekingBodies()[0];
+      expect(seek.playhead).toBe(1234.5);
+      expect(seek.playhead).not.toBe(-1);
+      // duration stays -1 for live, independent of playhead (#34).
+      expect(seek.duration).toBe(-1);
+
+      (connector as any).stopInterval();
+    });
+
+    it("emits exactly one seeking per DOM seeking in the autoplay fallback, with the pre-seek playhead", async () => {
+      const connector = await newConnector();
+      const el = makePlayingElement({ currentTime: 30 });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("timeupdate");
+      el.currentTime = 10;
+      el.seeking = true;
+      el.__dispatch("seeking");
+
+      expect(seekingBodies().length).toBe(1);
+      expect(seekingBodies()[0].playhead).toBe(30);
+
+      (connector as any).stopInterval();
+    });
+
+    it("does not carry a previous session's playhead into a new session's first seek", async () => {
+      const connector = await newConnector();
+      const el1 = makePlayingElement({ currentTime: 30 });
+      connector.load(el1);
+      el1.__dispatch("timeupdate"); // records 30 for the old session
+
+      connector.deinit();
+      await connector.init({
+        sessionId: "test-session-2",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      // New session: first seek happens before any non-seeking playhead recorded.
+      const el2 = makePlayingElement({ currentTime: 5, seeking: true });
+      connector.load(el2);
+
+      mockFetch.calls.reset();
+      el2.__dispatch("seeking");
+
+      expect(seekingBodies()[0].playhead).not.toBe(30);
+      expect(seekingBodies()[0].playhead).toBe(-1);
+
+      (connector as any).stopInterval();
+    });
+
+    it("leaves non-seeking events reporting the live currentTime unchanged", async () => {
+      const connector = await newConnector();
+      const el = makePlayingElement({ currentTime: 30 });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.currentTime = 77.5;
+      connector.reportMetadata({ contentId: "test", live: false });
+
+      const body = bodies()[0];
+      expect(body.event).toBe("metadata");
+      expect(body.playhead).toBe(77.5);
+
+      (connector as any).stopInterval();
+    });
+  });
 });
