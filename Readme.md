@@ -194,7 +194,9 @@ When you call `analytics.load(videoElement)` on `PlayerAnalyticsConnector`, the 
 | Buffer stall | `buffering` |
 | Buffer recovery | `buffered` |
 | `ended` | `stopped` (`reason: "ended"`) |
-| Page close / reload (`pagehide`, `visibilitychange` → hidden) | `stopped` (`reason: "aborted"`) |
+| Page close / reload (`pagehide` / page unload) | `stopped` (`reason: "aborted"`) |
+
+Hiding the tab (`visibilitychange` → hidden) does **not** end a playing session — since 0.4.0 ([#44](https://github.com/Eyevinn/player-analytics-client-sdk-web/pull/44)) a still-playing session survives a tab switch, so only `pagehide` / page unload triggers the auto `stopped` (`reason: "aborted"`).
 
 `bitrate_changed`, `error`, `warning`, `metadata`, and manual `stopped` (`reason: "aborted"`) are **not** auto-detected — call the corresponding `report*` methods when you have the data. A `heartbeat` event is sent every `heartbeatInterval` ms while the player is in the `playing` state (see [Init Parameters](#init-parameters) below).
 
