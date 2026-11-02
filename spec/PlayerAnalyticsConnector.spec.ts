@@ -1697,4 +1697,125 @@ describe("PlayerAnalyticsConnector", () => {
       (connector as any).stopInterval();
     });
   });
+
+  // End-to-end handshake (#56): when the eventsink advertises EPAS >= 0.7.0 the
+  // connector's seconds-based playhead/duration must reach the wire as integer
+  // milliseconds with an `sdk` field, including the pre-seek playhead the
+  // `seeking` event carries.
+  describe("ms + sdk handshake, end to end (#56)", () => {
+    async function flushMicrotasks() {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
+    function makePlayingElement(overrides: Record<string, any> = {}) {
+      const listeners: Record<string, Set<(...a: any[]) => void>> = {};
+      return {
+        currentTime: 0,
+        duration: 100,
+        paused: false,
+        ended: false,
+        readyState: 4,
+        seeking: false,
+        addEventListener(type: string, cb: (...a: any[]) => void) {
+          (listeners[type] || (listeners[type] = new Set())).add(cb);
+        },
+        removeEventListener(type: string, cb: (...a: any[]) => void) {
+          listeners[type] && listeners[type].delete(cb);
+        },
+        __dispatch(type: string) {
+          listeners[type] && listeners[type].forEach((cb) => cb({}));
+        },
+        ...overrides,
+      } as any;
+    }
+
+    const bodies = () =>
+      mockFetch.calls.all().map((c: any) => JSON.parse(c.args[1].body));
+
+    beforeEach(() => {
+      // Eventsink advertises a modern EPAS version in its init response.
+      mockFetch.and.returnValue(
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              sessionId: "test-session-id",
+              epasVersion: "0.7.0",
+            }),
+          statusText: "OK",
+        } as Response)
+      );
+    });
+
+    it("sends integer-ms playhead/duration and an sdk field for a normal event", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      await flushMicrotasks();
+
+      mockVideoElement.currentTime = 42.5;
+      mockVideoElement.duration = 120;
+      connector.load(mockVideoElement);
+
+      mockFetch.calls.reset();
+      connector.reportMetadata({ contentId: "test", live: false });
+
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.playhead).toBe(42500);
+      expect(body.duration).toBe(120000);
+      expect(body.sdk).toEqual({ name: "web", version: jasmine.any(String) });
+    });
+
+    it("keeps the -1 duration sentinel as -1 for live content in modern mode", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({ sessionId: "test-session" });
+      await flushMicrotasks();
+
+      mockVideoElement.currentTime = 37.5;
+      mockVideoElement.duration = Infinity; // live -> duration sentinel -1
+      connector.load(mockVideoElement);
+
+      mockFetch.calls.reset();
+      connector.reportMetadata({ contentId: "test", live: true });
+
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.duration).toBe(-1); // sentinel untouched
+      expect(body.playhead).toBe(37500); // real playhead converted to ms
+    });
+
+    it("carries the pre-seek playhead in milliseconds on the seeking event", async () => {
+      const connector = new PlayerAnalyticsConnector(
+        "https://example.com/analytics"
+      );
+      await connector.init({
+        sessionId: "test-session",
+        heartbeatInterval: 5000,
+      });
+      await flushMicrotasks();
+
+      const el = makePlayingElement({ currentTime: 30, duration: 100 });
+      connector.load(el);
+
+      mockFetch.calls.reset();
+      el.__dispatch("timeupdate"); // records pre-seek 30s while not seeking
+      el.currentTime = 10; // seek target
+      el.seeking = true;
+      el.__dispatch("seeking");
+
+      const seeking = bodies().filter((b) => b.event === "seeking");
+      expect(seeking.length).toBe(1);
+      // Pre-seek playhead 30s -> 30000ms, NOT the 10s target.
+      expect(seeking[0].playhead).toBe(30000);
+      expect(seeking[0].duration).toBe(100000);
+      expect(seeking[0].sdk).toEqual({
+        name: "web",
+        version: jasmine.any(String),
+      });
+
+      (connector as any).stopInterval();
+    });
+  });
 });

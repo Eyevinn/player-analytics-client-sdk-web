@@ -2,7 +2,14 @@ import {
   TInitEvent,
   TPlayerAnalyticsEvent,
 } from "@eyevinn/player-analytics-specification";
-import { EPAS_VERSION, HEARTBEAT_INTERVAL } from "./constants";
+import {
+  EPAS_VERSION,
+  HEARTBEAT_INTERVAL,
+  MIN_SDK_EPAS_VERSION,
+  SDK_NAME,
+  SDK_VERSION,
+} from "./constants";
+import { isEpasVersionAtLeast } from "./version";
 
 export type TAnalyticsSendError = {
   status?: number;
@@ -45,6 +52,13 @@ export class Reporter {
   private eventQueue: TPlayerAnalyticsEvent[] = [];
   private initPromise: Promise<Record<string, unknown>> | null = null;
   private onError?: TOnSendError;
+  // "Modern" mode: the eventsink advertised an EPAS version >= 0.7.0 in its
+  // init response, so every subsequent event carries the `sdk` field and sends
+  // playhead/duration as integer milliseconds. Stays false (legacy: seconds, no
+  // `sdk`) when the eventsink advertises an older version, omits `epasVersion`,
+  // or init runs in debug mode — see doInit(). Applies to both the normal
+  // dispatch path and the unload beacon, since both go through buildPayload().
+  private modernMode = false;
 
   constructor(options: IReporterOptions) {
     this.debug = options.debug ?? false;
@@ -126,6 +140,14 @@ export class Reporter {
 
       const initResponseJson = await initResponse.json();
 
+      // Decide the wire format for this session from the version the eventsink
+      // advertises. Only switch to ms/`sdk` when it validates against EPAS
+      // >= 0.7.0; older sinks (incl. today's prod) reject `sdk` with a 400.
+      this.modernMode = isEpasVersionAtLeast(
+        initResponseJson.epasVersion,
+        MIN_SDK_EPAS_VERSION
+      );
+
       if ((this.state as ReporterState) === "destroyed") {
         throw new Error(
           "[AnalyticsReporter] init aborted: reporter was destroyed"
@@ -201,11 +223,32 @@ export class Reporter {
     }
   }
 
+  // Convert a seconds figure to the integer milliseconds EPAS expects. The
+  // sentinel -1 ("unknown") is passed through exactly, never multiplied.
+  private toMilliseconds(value: number): number {
+    return value === -1 ? -1 : Math.round(value * 1000);
+  }
+
   private buildPayload(data: TPlayerAnalyticsEvent) {
-    return {
+    const payload = {
       ...data,
       sessionId: this.sessionId,
       shardId: this.shardId,
+    };
+
+    // Legacy mode: byte-for-byte the pre-0.7.0 wire format — seconds, no `sdk`.
+    if (!this.modernMode) {
+      return payload;
+    }
+
+    // Modern mode: stamp the SDK identity and emit playhead/duration as the
+    // integer milliseconds EPAS >= 0.7.0 expects (the Swift/Android SDKs
+    // already do). The connector still produces these in seconds.
+    return {
+      ...payload,
+      playhead: this.toMilliseconds(payload.playhead),
+      duration: this.toMilliseconds(payload.duration),
+      sdk: { name: SDK_NAME, version: SDK_VERSION },
     };
   }
 
