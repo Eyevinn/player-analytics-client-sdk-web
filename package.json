@@ -50,6 +50,6 @@
   },
   "dependencies": {
     "@eyevinn/media-event-filter": "^3.4.1",
-    "@eyevinn/player-analytics-specification": "0.5.0"
+    "@eyevinn/player-analytics-specification": "0.7.0"
   }
 }

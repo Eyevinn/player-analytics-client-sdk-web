@@ -200,6 +200,15 @@ Hiding the tab (`visibilitychange` → hidden) does **not** end a playing sessio
 
 `bitrate_changed`, `error`, `warning`, `metadata`, and manual `stopped` (`reason: "aborted"`) are **not** auto-detected — call the corresponding `report*` methods when you have the data. A `heartbeat` event is sent every `heartbeatInterval` ms while the player is in the `playing` state (see [Init Parameters](#init-parameters) below).
 
+### Playhead & duration units (EPAS version handshake)
+
+EPAS defines `playhead` and `duration` as **integer milliseconds** (`-1` when unknown). To stay compatible with eventsinks that predate this, the SDK negotiates the unit from the version the eventsink advertises as `epasVersion` in its init response:
+
+- **EPAS >= 0.7.0:** the SDK sends `playhead`/`duration` as integer milliseconds and adds an `sdk` field (`{ "name": "web", "version": "<this package's version>" }`) to every event. The `sdk` field tells the eventsink the values are already in milliseconds, matching the Android and iOS/Swift SDKs.
+- **EPAS < 0.7.0, `epasVersion` missing or `"n/a"`, or a failed init:** the SDK keeps the legacy wire format — `playhead`/`duration` in **seconds** and **no** `sdk` field — so nothing changes for an eventsink validating against spec <= 0.6.0 (which rejects the `sdk` field with a 400).
+
+The `-1` "unknown" sentinel is always sent as `-1` and is never converted. The version comparison is numeric semver (so `0.10.0` is correctly newer than `0.7.0`). The same mode is used on the unload beacon path.
+
 ### Unload-time delivery (page close / reload)
 
 When the page is closed or reloaded mid-session, the SDK delivers the final `stopped` event (`reason: "aborted"`) over [`navigator.sendBeacon`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon) instead of a normal fetch. The beacon is sent as a `text/plain` JSON body with **no `X-EPAS-*` headers**, which keeps it a CORS "simple request" so the browser does not issue a preflight — a preflight is dropped while the page unloads, which is why the `stopped` event was previously lost. The eventsink reads the event from the JSON body (`body.event`), so this is a fully supported way to send unload-time events.

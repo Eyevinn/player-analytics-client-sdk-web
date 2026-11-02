@@ -1,5 +1,6 @@
 import { Reporter, IReporterOptions } from "../src/utils/Reporter";
 import { TPlayerAnalyticsEvent } from "@eyevinn/player-analytics-specification";
+import packageJson from "../package.json";
 
 describe("Reporter", () => {
   let mockFetch: jasmine.Spy;
@@ -820,6 +821,178 @@ describe("Reporter", () => {
       expect(mockFetch).not.toHaveBeenCalled();
       // Don't warn — it's expected after destroy
       expect(console.warn).not.toHaveBeenCalled();
+    });
+  });
+
+  // The EPAS version handshake (#56): the eventsink advertises `epasVersion` in
+  // its init response. From >= 0.7.0 ("modern" mode) the SDK sends integer-ms
+  // playhead/duration plus an `sdk` field; below that ("legacy" mode) it is
+  // byte-for-byte the pre-0.7.0 seconds wire format with no `sdk`.
+  describe("EPAS version handshake (ms + sdk)", () => {
+    function initResponse(epasVersion?: string): Promise<Response> {
+      const json: Record<string, unknown> = {
+        sessionId: "server-generated-id",
+      };
+      if (epasVersion !== undefined) {
+        json.epasVersion = epasVersion;
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(json),
+        statusText: "OK",
+      } as Response);
+    }
+
+    async function sendAndReadBody(
+      epasVersion: string | undefined,
+      event: TPlayerAnalyticsEvent
+    ): Promise<any> {
+      mockFetch.and.returnValue(initResponse(epasVersion));
+      const reporter = new Reporter({
+        eventsinkUrl: "https://example.com/analytics",
+        sessionId: "test-session-id",
+      });
+      await reporter.init("test-session-id");
+      mockFetch.calls.reset();
+
+      reporter.send(event);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      return JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+    }
+
+    const playingEvent: TPlayerAnalyticsEvent = {
+      event: "playing",
+      sessionId: "test-session-id",
+      timestamp: 1234567890,
+      playhead: 10.5,
+      duration: 120,
+    };
+
+    describe("modern mode (epasVersion >= 0.7.0)", () => {
+      it("stamps every event with sdk.name=web and sdk.version=package version", async () => {
+        const body = await sendAndReadBody("0.7.0", playingEvent);
+        expect(body.sdk).toEqual({ name: "web", version: packageJson.version });
+      });
+
+      it("sends playhead/duration as integer milliseconds", async () => {
+        const body = await sendAndReadBody("0.7.0", playingEvent);
+        expect(body.playhead).toBe(10500);
+        expect(body.duration).toBe(120000);
+      });
+
+      it("rounds fractional-second playheads to the nearest millisecond", async () => {
+        const body = await sendAndReadBody("0.7.0", {
+          ...playingEvent,
+          playhead: 1.2345, // *1000 = 1234.5 -> rounds to 1235
+          duration: 1.2344, // *1000 = 1234.4 -> rounds to 1234
+        } as TPlayerAnalyticsEvent);
+        expect(body.playhead).toBe(1235);
+        expect(body.duration).toBe(1234);
+      });
+
+      it("leaves the -1 sentinel exactly -1 (never multiplied)", async () => {
+        const body = await sendAndReadBody("0.7.0", {
+          ...playingEvent,
+          playhead: -1,
+          duration: -1,
+        } as TPlayerAnalyticsEvent);
+        expect(body.playhead).toBe(-1);
+        expect(body.duration).toBe(-1);
+        // The sdk field is still present even when the values are unknown.
+        expect(body.sdk).toEqual({ name: "web", version: packageJson.version });
+      });
+
+      it("treats 0.10.0 as modern (numeric semver, not string compare)", async () => {
+        const body = await sendAndReadBody("0.10.0", playingEvent);
+        expect(body.sdk).toBeDefined();
+        expect(body.playhead).toBe(10500);
+      });
+
+      it("uses the same ms + sdk format on the unload beacon path", async () => {
+        mockFetch.and.returnValue(initResponse("0.7.0"));
+        const reporter = new Reporter({
+          eventsinkUrl: "https://example.com/analytics",
+          sessionId: "test-session-id",
+        });
+        await reporter.init("test-session-id");
+        mockFetch.calls.reset();
+
+        // No navigator.sendBeacon defined -> keepalive fetch fallback, whose
+        // body we can read synchronously.
+        const result = reporter.sendBeacon({
+          event: "stopped",
+          sessionId: "test-session-id",
+          timestamp: 1234567890,
+          playhead: 42.5,
+          duration: 120,
+          payload: { reason: "aborted" },
+        } as TPlayerAnalyticsEvent);
+
+        expect(result).toBe(true);
+        const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+        expect(body.playhead).toBe(42500);
+        expect(body.duration).toBe(120000);
+        expect(body.sdk).toEqual({ name: "web", version: packageJson.version });
+      });
+    });
+
+    describe("legacy mode (older / missing epasVersion)", () => {
+      it("keeps seconds and omits sdk when epasVersion is 0.6.0", async () => {
+        const body = await sendAndReadBody("0.6.0", playingEvent);
+        expect(body.playhead).toBe(10.5);
+        expect(body.duration).toBe(120);
+        expect(body.sdk).toBeUndefined();
+      });
+
+      it('keeps seconds and omits sdk when epasVersion is "n/a"', async () => {
+        const body = await sendAndReadBody("n/a", playingEvent);
+        expect(body.playhead).toBe(10.5);
+        expect(body.sdk).toBeUndefined();
+      });
+
+      it("keeps seconds and omits sdk when epasVersion is missing", async () => {
+        const body = await sendAndReadBody(undefined, playingEvent);
+        expect(body.playhead).toBe(10.5);
+        expect(body.duration).toBe(120);
+        expect(body.sdk).toBeUndefined();
+      });
+
+      it("sends nothing different to a v0.6.0 eventsink than the old SDK did", async () => {
+        const body = await sendAndReadBody("0.6.0", playingEvent);
+        // Exactly the pre-#56 payload shape: no sdk, seconds preserved.
+        // (shardId was undefined, so JSON.stringify drops the key entirely.)
+        expect(body).toEqual({
+          event: "playing",
+          sessionId: "server-generated-id",
+          timestamp: 1234567890,
+          playhead: 10.5,
+          duration: 120,
+        });
+      });
+
+      it("keeps seconds and omits sdk on the beacon path in legacy mode", async () => {
+        mockFetch.and.returnValue(initResponse("0.6.0"));
+        const reporter = new Reporter({
+          eventsinkUrl: "https://example.com/analytics",
+          sessionId: "test-session-id",
+        });
+        await reporter.init("test-session-id");
+        mockFetch.calls.reset();
+
+        reporter.sendBeacon({
+          event: "stopped",
+          sessionId: "test-session-id",
+          timestamp: 1234567890,
+          playhead: 42.5,
+          duration: 120,
+          payload: { reason: "aborted" },
+        } as TPlayerAnalyticsEvent);
+
+        const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+        expect(body.playhead).toBe(42.5);
+        expect(body.sdk).toBeUndefined();
+      });
     });
   });
 });
