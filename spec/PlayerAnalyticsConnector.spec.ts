@@ -779,6 +779,42 @@ describe("PlayerAnalyticsConnector", () => {
       expect(body.payload.drmType).toBe("widevine");
     });
 
+    it("should include the device IANA time zone when the caller omits it", () => {
+      connector.reportMetadata({ contentId: "x" });
+
+      expect(mockFetch).toHaveBeenCalled();
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.event).toBe("metadata");
+      expect(body.payload.timeZone).toBe(
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+      );
+    });
+
+    it("should send a caller-supplied timeZone unchanged", () => {
+      connector.reportMetadata({ contentId: "x", timeZone: "Asia/Tokyo" });
+
+      expect(mockFetch).toHaveBeenCalled();
+      const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+      expect(body.payload.timeZone).toBe("Asia/Tokyo");
+    });
+
+    it("should omit timeZone (and not throw) when Intl is unavailable", () => {
+      const originalIntl = (globalThis as any).Intl;
+      (globalThis as any).Intl = undefined;
+      try {
+        expect(() =>
+          connector.reportMetadata({ contentId: "x" })
+        ).not.toThrow();
+
+        expect(mockFetch).toHaveBeenCalled();
+        const body = JSON.parse(mockFetch.calls.argsFor(0)[1].body);
+        expect(body.event).toBe("metadata");
+        expect("timeZone" in body.payload).toBe(false);
+      } finally {
+        (globalThis as any).Intl = originalIntl;
+      }
+    });
+
     it("should send warning event with correct payload", () => {
       connector.reportWarning({
         category: "player",

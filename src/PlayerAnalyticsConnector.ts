@@ -376,11 +376,41 @@ export class PlayerAnalyticsConnector {
       console.warn("[PlayerAnalyticsConnector] Analytics not initiated");
       return;
     }
+    // Stamp the device IANA time zone so hosted OA pipelines can derive the
+    // viewer's country when it cannot be resolved from the request IP. It is a
+    // pass-through metadata key (allowed by TMetadataEventPayload's index
+    // signature). A caller-supplied timeZone always wins and is sent unchanged;
+    // in environments without a working Intl the key is omitted rather than
+    // throwing.
+    let metadataPayload = payload;
+    if (metadataPayload.timeZone === undefined) {
+      const timeZone = this.resolveTimeZone();
+      if (timeZone !== undefined) {
+        metadataPayload = { ...payload, timeZone };
+      }
+    }
     this.playerAnalytics.metadata({
       event: "metadata",
       ...this.playbackState(),
-      payload,
+      payload: metadataPayload,
     });
+  }
+
+  // Resolve the device's IANA time zone (e.g. "Europe/Stockholm") via the
+  // built-in Intl API — no extra dependency. Returns undefined when Intl is
+  // unavailable or throws, so the caller can omit the key entirely.
+  private resolveTimeZone(): string | undefined {
+    try {
+      if (
+        typeof Intl === "undefined" ||
+        typeof Intl.DateTimeFormat !== "function"
+      ) {
+        return undefined;
+      }
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   public reportWarning(payload: TWarningEventPayload) {
