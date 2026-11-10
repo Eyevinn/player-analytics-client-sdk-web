@@ -175,9 +175,23 @@ export type TMetadataEventPayload = {
   deviceId?: string;
   deviceModel?: string;
   deviceType?: string;
+  timeZone?: string; // device IANA time zone, added automatically (see below)
   [key: string]: string | boolean; // additional custom metadata
 }
 ```
+
+#### Automatic `timeZone`
+
+`reportMetadata` automatically adds a `timeZone` key holding the device's IANA
+time zone (e.g. `"Europe/Stockholm"`), resolved from the built-in
+`Intl.DateTimeFormat().resolvedOptions().timeZone`. Hosted Open Analytics
+pipelines use it to derive the viewer's country when it cannot be resolved from
+the request IP.
+
+- If you pass your own `timeZone`, it is sent unchanged and overrides the
+  automatic value.
+- In environments without a working `Intl`, the key is simply omitted (nothing
+  is thrown).
 
 ### Events Tracked
 
