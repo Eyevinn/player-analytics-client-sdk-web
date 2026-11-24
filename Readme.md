@@ -10,7 +10,9 @@ npm install @eyevinn/player-analytics-client-sdk-web
 
 ## EPAS backend in Open Source Cloud
 
-The quickest way to get started is to setup an EPAS compatible backend in [Eyevinn Open Source Cloud](https://www.osaas.io)
+> The quickest way: [Open Analytics](https://analytics.apps.osaas.io/?utm_source=github&utm_medium=readme&utm_campaign=analytics&utm_content=sdk-web) creates the whole pipeline (eventsink, worker, ClickHouse, Grafana) for you. Try this SDK first without an account in the [SDK playground](https://analytics.apps.osaas.io/demo?utm_source=github&utm_medium=readme&utm_campaign=analytics&utm_content=sdk-web#try-the-sdk).
+
+To set it up yourself in [Eyevinn Open Source Cloud](https://www.osaas.io):
 
 ![EPAS pipeline in OSC](pipeline.png)
 
