@@ -25,13 +25,24 @@
     "type": "git",
     "url": "git+https://github.com/Eyevinn/player-analytics-client-sdk-web.git"
   },
-  "keywords": [],
+  "keywords": [
+    "epas",
+    "player analytics",
+    "video analytics",
+    "video player",
+    "qoe",
+    "html5 video",
+    "hls",
+    "dash",
+    "streaming",
+    "analytics sdk"
+  ],
   "author": "erik.hoffman@eyevinn.se",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/Eyevinn/player-analytics-client-sdk-web/issues"
   },
-  "homepage": "https://github.com/Eyevinn/player-analytics-client-sdk-web#readme",
+  "homepage": "https://analytics.apps.osaas.io",
   "devDependencies": {
     "@parcel/packager-ts": "^2.13.3",
     "@parcel/transformer-typescript-tsc": "^2.13.3",
